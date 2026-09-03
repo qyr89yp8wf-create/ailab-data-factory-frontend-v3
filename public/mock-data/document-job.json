@@ -1,0 +1,106 @@
+{
+  "schema_version": "template-builder-job/v1",
+  "id": "TEMPLATE-DOC-20260831-181911-99CC",
+  "pipeline": "template-builder.document-image",
+  "task_type": "document_image",
+  "name": "费冬妮测试",
+  "business_type": "报关单",
+  "status": "completed",
+  "progress": 100,
+  "created_at": "2026-08-31 18:19:11",
+  "updated_at": "2026-09-01 10:28:21",
+  "parameters": {
+    "imgsz": 1024,
+    "conf": 0.2,
+    "semantic_model": "qwen3-vl-8b-instruct",
+    "semantic_prompt_version": "document-template-semantic/v2"
+  },
+  "input": {
+    "original_filename": "进口货物申报2.jpg",
+    "content_type": "image/jpeg",
+    "format": "JPEG",
+    "width": 710,
+    "height": 1000,
+    "size_bytes": 61124,
+    "path": "input/original.jpg"
+  },
+  "result": {
+    "device": "cpu",
+    "elapsed_ms": 7306.66,
+    "raw_detection_count": 3,
+    "effective_region_count": 3,
+    "ignored_region_count": 1,
+    "cell_count": 34,
+    "raw_cell_count": 41,
+    "structure_postprocess": {
+      "engine": "smallest-non-overlapping/v1",
+      "applied": true,
+      "report": {
+        "input_cells": 41,
+        "output_cells": 34,
+        "removed_duplicates": 0,
+        "removed_containers": 3,
+        "snapped_edges": 59,
+        "eliminated_overlaps": 7,
+        "filled_gaps": 0,
+        "overlaps_before": 29,
+        "overlaps_after": 0,
+        "unresolved_locked_overlaps": 0
+      }
+    },
+    "text_count": 139,
+    "asset_count": 1,
+    "field_count": 72,
+    "semantic_counts": {
+      "texts": 139,
+      "fixed_texts": 67,
+      "dynamic_texts": 72,
+      "fields": 72,
+      "review_required": 72
+    },
+    "semantic_status": "completed_with_fallback",
+    "semantic_model": "qwen3-vl-8b-instruct",
+    "draft_status": "trial_rejected",
+    "draft_revision": 4,
+    "validation_summary": {
+      "errors": 0,
+      "warnings": 3
+    },
+    "review_reasons": [
+      "语义模型自动分析失败，已使用本地规则兜底：Remote end closed connection without response",
+      "语义工作流部分调用未完成，相关低置信度字段已标记待复核",
+      "有 72 个字段需要人工复核"
+    ],
+    "canvas": {
+      "width": 710,
+      "height": 1000
+    },
+    "artifacts": {
+      "input": "input/original.jpg",
+      "layout": "layout/detections.json",
+      "layout_overlay": "layout/overlay.jpg",
+      "lines": "structure/lines.json",
+      "cells": "structure/cells.json",
+      "cells_overlay": "structure/cells_overlay.jpg",
+      "texts": "semantic/texts.json",
+      "assets": "semantic/assets.json",
+      "semantic_inference": "semantic/semantic_inference.json",
+      "ocr_raw": "semantic/ocr_raw.json",
+      "system_draft": "template/system_draft.json",
+      "draft": "template/draft.json",
+      "trial_image": "trial/attempts/2ae6a6a4ad1049ed/trial_r0004.png",
+      "trial_manifest": "trial/attempts/2ae6a6a4ad1049ed/manifest_r0004.json",
+      "trial_quality_json": "trial/attempts/2ae6a6a4ad1049ed/quality_r0004.json",
+      "trial_quality_report": "trial/attempts/2ae6a6a4ad1049ed/quality_report_r0004.md"
+    },
+    "published_template": null,
+    "trial_quality_status": "REJECT",
+    "trial_quality_summary": {
+      "checks": 185,
+      "passed": 179,
+      "review": 4,
+      "rejected": 2
+    }
+  },
+  "error": null
+}

@@ -1,0 +1,23 @@
+{
+  "name": "data-factory-frontend-v3",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 8767",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 8767"
+  },
+  "dependencies": {
+    "@ant-design/icons": "latest",
+    "antd": "latest",
+    "konva": "^10.3.1",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-konva": "^19.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest"
+  }
+}

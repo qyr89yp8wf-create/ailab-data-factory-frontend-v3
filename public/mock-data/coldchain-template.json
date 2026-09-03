@@ -1,0 +1,1134 @@
+{
+  "schema_version": "coldchain-template-record/v2",
+  "template_id": "COLDTPL-REEFER-INTL-MVP",
+  "name": "冷藏集装箱国际运输（MVP）",
+  "description": "生成国际冷藏集装箱运输过程中的温度、湿度、GPS、供电、网络与运输事件时序数据。",
+  "business_type": "传感器时序",
+  "scope": "official",
+  "status": "enabled",
+  "created_at": "2026-08-27 15:58:03",
+  "updated_at": "2026-08-31 13:15:28",
+  "versions": [
+    {
+      "version": "V1",
+      "published_at": "2026-08-27 15:58:03",
+      "configuration": {
+        "schema_version": "coldchain-template/v1",
+        "name": "冷藏集装箱国际运输（MVP）",
+        "description": "生成国际冷藏集装箱运输过程中的温度、湿度、GPS、供电、网络与运输事件时序数据。",
+        "business_type": "传感器时序",
+        "scope": "official",
+        "output_schema": {
+          "parameters": [
+            "temperature_setpoint",
+            "supply_air_temperature",
+            "return_air_temperature",
+            "cargo_temperature",
+            "ambient_temperature",
+            "relative_humidity",
+            "gps",
+            "power_status",
+            "transport_event",
+            "network_status"
+          ],
+          "sample_interval_minutes": 60
+        },
+        "event_generation": {
+          "prompt_version": "coldchain-event-plan/v1",
+          "scenario_prompt": "你是冷藏集装箱国际运输事件叙事助手。根据系统给出的路线、货物、设备、运输阶段和已选事件白名单，为每票生成简短中文运输叙事。不得输出或改写任何温度、湿度、经纬度、时间和设备数值；不得新增白名单外事件；不得使用真实企业、人员、船名或集装箱号。",
+          "allowed_events": [
+            "normal",
+            "power_off_short",
+            "door_open",
+            "initial_warm_load",
+            "blocked_airflow",
+            "cooling_degradation",
+            "sensor_bias",
+            "vessel_delay"
+          ],
+          "event_strategy": "whitelist",
+          "llm_numeric_truth_impact": false
+        },
+        "rule_engine": {
+          "engine_id": "coldchain_physics_v1",
+          "user_code_allowed": false,
+          "exposed_parameters": {
+            "temperature_unit": "celsius",
+            "route_mode": "dictionary_random",
+            "sampling_mode": "hourly"
+          }
+        },
+        "generation_defaults": {
+          "count": 10,
+          "seed": 20260818,
+          "model_alias": "qwen3-14b",
+          "parameters": [
+            "temperature_setpoint",
+            "supply_air_temperature",
+            "return_air_temperature",
+            "cargo_temperature",
+            "ambient_temperature",
+            "relative_humidity",
+            "gps",
+            "power_status",
+            "transport_event",
+            "network_status"
+          ]
+        },
+        "augmentation_defaults": {
+          "enabled": false,
+          "methods": [
+            "sensor_jitter",
+            "time_shift",
+            "planned_missing",
+            "gps_noise"
+          ],
+          "ratio": 0.2,
+          "intensity": "light",
+          "max_new": 5
+        },
+        "quality_defaults": {
+          "enabled": true,
+          "privacy_check_enabled": true,
+          "expansion_enabled": false,
+          "max_expansion_count": 5
+        }
+      }
+    },
+    {
+      "version": "V2",
+      "published_at": "2026-08-27 17:23:47",
+      "configuration": {
+        "schema_version": "coldchain-template/v2",
+        "name": "冷藏集装箱国际运输（MVP）",
+        "description": "生成国际冷藏集装箱运输过程中的温度、湿度、GPS、供电、网络与运输事件时序数据。",
+        "business_type": "传感器时序",
+        "scope": "official",
+        "event_generation": {
+          "prompt_version": "coldchain-event-plan/v2",
+          "scenario_prompt": "你是冷藏集装箱国际运输事件规划助手。根据系统提供的路线、货物、设备与运输阶段，从允许事件白名单中选择并编排事件，为每票生成简短中文事件说明。不得输出或改写温度、湿度、经纬度、时间和设备数值；不得新增白名单外事件；不得使用真实企业、人员、船名或集装箱号。",
+          "allowed_events": [
+            "normal",
+            "power_off_short",
+            "door_open",
+            "initial_warm_load",
+            "blocked_airflow",
+            "cooling_degradation",
+            "sensor_bias",
+            "vessel_delay"
+          ],
+          "event_strategy": "whitelist",
+          "llm_numeric_truth_impact": false
+        },
+        "fields": [
+          {
+            "field_id": "temperature_setpoint",
+            "label": "温度设定值",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-SETPOINT-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "temperature_setpoint",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-SETPOINT-01",
+                "check_type": "range",
+                "min_value": -30.0,
+                "max_value": 20.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "设定温度必须处于冷藏设备合理摄氏度范围"
+              }
+            ]
+          },
+          {
+            "field_id": "supply_air_temperature",
+            "label": "送风温度",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-SUPPLY-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "supply_air_temperature",
+                "effect_operator": "engine_default",
+                "reference_field": "temperature_setpoint",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-SUPPLY-01",
+                "check_type": "range",
+                "min_value": -40.0,
+                "max_value": 50.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "送风温度超出设备可解释范围"
+              }
+            ]
+          },
+          {
+            "field_id": "return_air_temperature",
+            "label": "箱内温度（回风）",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-RETURN-BASE",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "return_air_temperature",
+                "effect_operator": "engine_default",
+                "reference_field": "temperature_setpoint",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              },
+              {
+                "rule_id": "GEN-RETURN-DOOR",
+                "condition_variable": "transport_event",
+                "condition_operator": "equals",
+                "condition_value": "door_open",
+                "target_field": "return_air_temperature",
+                "effect_operator": "move_towards",
+                "reference_field": "ambient_temperature",
+                "coefficient_min": 0.08,
+                "coefficient_max": 0.15,
+                "duration_min_minutes": 10,
+                "duration_max_minutes": 30
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-RETURN-01",
+                "check_type": "range",
+                "min_value": -40.0,
+                "max_value": 50.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "箱内回风温度超出合理摄氏度范围"
+              },
+              {
+                "rule_id": "QC-RETURN-RATE",
+                "check_type": "max_change_rate",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": 8.0,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REVIEW",
+                "message": "箱内温度变化率过大，需复核事件或传感器"
+              }
+            ]
+          },
+          {
+            "field_id": "cargo_temperature",
+            "label": "货物温度",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-CARGO-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "cargo_temperature",
+                "effect_operator": "engine_default",
+                "reference_field": "return_air_temperature",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-CARGO-01",
+                "check_type": "range",
+                "min_value": -40.0,
+                "max_value": 50.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "货物温度超出合理摄氏度范围"
+              }
+            ]
+          },
+          {
+            "field_id": "ambient_temperature",
+            "label": "外界温度",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-AMBIENT-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "ambient_temperature",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-AMBIENT-01",
+                "check_type": "range",
+                "min_value": -25.0,
+                "max_value": 50.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "外界温度超出模板支持范围"
+              }
+            ]
+          },
+          {
+            "field_id": "relative_humidity",
+            "label": "相对湿度",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-RH-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "relative_humidity",
+                "effect_operator": "engine_default",
+                "reference_field": "ambient_temperature",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-RH-01",
+                "check_type": "range",
+                "min_value": 0.0,
+                "max_value": 100.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "相对湿度必须在 0–100%RH"
+              }
+            ]
+          },
+          {
+            "field_id": "gps",
+            "label": "GPS 位置",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-GPS-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "gps",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-GPS-01",
+                "check_type": "required",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "GPS 经纬度不得整段缺失"
+              }
+            ]
+          },
+          {
+            "field_id": "power_status",
+            "label": "供电状态",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-POWER-01",
+                "condition_variable": "transport_event",
+                "condition_operator": "equals",
+                "condition_value": "power_off_short",
+                "target_field": "power_status",
+                "effect_operator": "set",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 30,
+                "duration_max_minutes": 180
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-POWER-01",
+                "check_type": "allowed_values",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [
+                  0,
+                  1
+                ],
+                "severity": "REJECT",
+                "message": "供电状态只允许 0 或 1"
+              }
+            ]
+          },
+          {
+            "field_id": "transport_event",
+            "label": "运输阶段与事件",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-EVENT-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "transport_event",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-EVENT-01",
+                "check_type": "allowed_values",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [
+                  "normal",
+                  "power_off_short",
+                  "door_open",
+                  "initial_warm_load",
+                  "blocked_airflow",
+                  "cooling_degradation",
+                  "sensor_bias",
+                  "vessel_delay",
+                  "network_offline",
+                  "defrost"
+                ],
+                "severity": "REJECT",
+                "message": "运输事件必须来自模板白名单或规则引擎派生事件"
+              }
+            ]
+          },
+          {
+            "field_id": "network_status",
+            "label": "联网状态",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-NETWORK-01",
+                "condition_variable": "transport_stage",
+                "condition_operator": "equals",
+                "condition_value": "ocean",
+                "target_field": "network_status",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-NETWORK-01",
+                "check_type": "allowed_values",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [
+                  0,
+                  1
+                ],
+                "severity": "REJECT",
+                "message": "联网状态只允许 0 或 1"
+              }
+            ]
+          }
+        ],
+        "rule_engine": {
+          "engine_id": "coldchain_physics_v1",
+          "user_code_allowed": false
+        }
+      },
+      "trial_run": {
+        "status": "PASS",
+        "source": "official_acceptance"
+      }
+    },
+    {
+      "version": "V3",
+      "published_at": "2026-08-31 13:15:28",
+      "configuration": {
+        "schema_version": "coldchain-template/v3",
+        "name": "冷藏集装箱国际运输（MVP）",
+        "description": "生成国际冷藏集装箱运输过程中的温度、湿度、GPS、供电、网络与运输事件时序数据。",
+        "business_type": "传感器时序",
+        "scope": "official",
+        "event_generation": {
+          "prompt_version": "coldchain-event-plan/v2",
+          "scenario_prompt": "你是冷藏集装箱国际运输事件规划助手。根据系统提供的路线、货物、设备与运输阶段，从允许事件白名单中选择并编排事件，为每票生成简短中文事件说明。不得输出或改写温度、湿度、经纬度、时间和设备数值；不得新增白名单外事件；不得使用真实企业、人员、船名或集装箱号。",
+          "allowed_events": [
+            "normal",
+            "power_off_short",
+            "door_open",
+            "initial_warm_load",
+            "blocked_airflow",
+            "cooling_degradation",
+            "sensor_bias",
+            "vessel_delay"
+          ],
+          "event_strategy": "whitelist",
+          "llm_numeric_truth_impact": false
+        },
+        "coverage": {
+          "schema_version": "coldchain-coverage/v1",
+          "strategy": "template_profile_pass_only",
+          "labeling_prompt": "系统会为每票分配 coverage_profile_id 和 coverage_labels。你只能原样复制这些标签到输出，不得新增、遗漏、翻译或改写；事件说明必须与主要事件、事件阶段和时序形态一致。温湿度、GPS、供电和网络数值仍由规则引擎生成。",
+          "dimensions": [
+            {
+              "dimension_id": "primary_event",
+              "name": "主要事件",
+              "labels": [
+                {
+                  "value": "normal",
+                  "name": "正常运输"
+                },
+                {
+                  "value": "power_off_short",
+                  "name": "短时断电"
+                },
+                {
+                  "value": "door_open",
+                  "name": "开门"
+                },
+                {
+                  "value": "initial_warm_load",
+                  "name": "初始热负载"
+                },
+                {
+                  "value": "blocked_airflow",
+                  "name": "风道阻塞"
+                },
+                {
+                  "value": "cooling_degradation",
+                  "name": "制冷性能下降"
+                },
+                {
+                  "value": "sensor_bias",
+                  "name": "传感器偏移"
+                },
+                {
+                  "value": "vessel_delay",
+                  "name": "船期延误"
+                }
+              ]
+            },
+            {
+              "dimension_id": "event_stage",
+              "name": "事件阶段",
+              "labels": [
+                {
+                  "value": "none",
+                  "name": "无异常阶段"
+                },
+                {
+                  "value": "origin_pretrip",
+                  "name": "起运前检查"
+                },
+                {
+                  "value": "origin_road",
+                  "name": "起运公路"
+                },
+                {
+                  "value": "origin_terminal",
+                  "name": "起运港区"
+                },
+                {
+                  "value": "ocean",
+                  "name": "海运"
+                },
+                {
+                  "value": "destination_terminal",
+                  "name": "目的港区"
+                },
+                {
+                  "value": "destination_road",
+                  "name": "目的地公路"
+                },
+                {
+                  "value": "delivered",
+                  "name": "交付"
+                }
+              ]
+            },
+            {
+              "dimension_id": "temporal_pattern",
+              "name": "时序形态",
+              "labels": [
+                {
+                  "value": "stable",
+                  "name": "稳定"
+                },
+                {
+                  "value": "recovery",
+                  "name": "断电后恢复"
+                },
+                {
+                  "value": "transient_warming",
+                  "name": "短时升温"
+                },
+                {
+                  "value": "cooldown",
+                  "name": "逐步降温"
+                },
+                {
+                  "value": "slow_warming",
+                  "name": "缓慢升温"
+                },
+                {
+                  "value": "slow_drift",
+                  "name": "缓慢漂移"
+                },
+                {
+                  "value": "level_shift",
+                  "name": "测量偏移"
+                },
+                {
+                  "value": "extended_duration",
+                  "name": "运输时长延长"
+                }
+              ]
+            }
+          ],
+          "profiles": [
+            {
+              "profile_id": "normal_stable",
+              "name": "正常稳定运输",
+              "labels": {
+                "primary_event": "normal",
+                "event_stage": "none",
+                "temporal_pattern": "stable"
+              },
+              "target_weight": 3.0,
+              "minimum_pass_count": 1,
+              "required": true
+            },
+            {
+              "profile_id": "power_off_recovery",
+              "name": "短时断电与恢复",
+              "labels": {
+                "primary_event": "power_off_short",
+                "event_stage": "origin_road",
+                "temporal_pattern": "recovery"
+              },
+              "target_weight": 1.0,
+              "minimum_pass_count": 1,
+              "required": true
+            },
+            {
+              "profile_id": "door_open_warming",
+              "name": "港区开门短时升温",
+              "labels": {
+                "primary_event": "door_open",
+                "event_stage": "destination_terminal",
+                "temporal_pattern": "transient_warming"
+              },
+              "target_weight": 1.0,
+              "minimum_pass_count": 1,
+              "required": true
+            },
+            {
+              "profile_id": "warm_load_cooldown",
+              "name": "初始热负载降温",
+              "labels": {
+                "primary_event": "initial_warm_load",
+                "event_stage": "origin_pretrip",
+                "temporal_pattern": "cooldown"
+              },
+              "target_weight": 1.0,
+              "minimum_pass_count": 1,
+              "required": true
+            },
+            {
+              "profile_id": "blocked_airflow_warming",
+              "name": "海运风道阻塞",
+              "labels": {
+                "primary_event": "blocked_airflow",
+                "event_stage": "ocean",
+                "temporal_pattern": "slow_warming"
+              },
+              "target_weight": 1.0,
+              "minimum_pass_count": 1,
+              "required": true
+            },
+            {
+              "profile_id": "cooling_degradation_drift",
+              "name": "制冷性能下降",
+              "labels": {
+                "primary_event": "cooling_degradation",
+                "event_stage": "ocean",
+                "temporal_pattern": "slow_drift"
+              },
+              "target_weight": 1.0,
+              "minimum_pass_count": 1,
+              "required": true
+            },
+            {
+              "profile_id": "sensor_bias_shift",
+              "name": "传感器偏移",
+              "labels": {
+                "primary_event": "sensor_bias",
+                "event_stage": "ocean",
+                "temporal_pattern": "level_shift"
+              },
+              "target_weight": 1.0,
+              "minimum_pass_count": 1,
+              "required": true
+            },
+            {
+              "profile_id": "vessel_delay_extended",
+              "name": "船期延误",
+              "labels": {
+                "primary_event": "vessel_delay",
+                "event_stage": "ocean",
+                "temporal_pattern": "extended_duration"
+              },
+              "target_weight": 1.0,
+              "minimum_pass_count": 1,
+              "required": true
+            }
+          ]
+        },
+        "fields": [
+          {
+            "field_id": "temperature_setpoint",
+            "label": "温度设定值",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-SETPOINT-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "temperature_setpoint",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-SETPOINT-01",
+                "check_type": "range",
+                "min_value": -30.0,
+                "max_value": 20.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "设定温度必须处于冷藏设备合理摄氏度范围"
+              }
+            ]
+          },
+          {
+            "field_id": "supply_air_temperature",
+            "label": "送风温度",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-SUPPLY-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "supply_air_temperature",
+                "effect_operator": "engine_default",
+                "reference_field": "temperature_setpoint",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-SUPPLY-01",
+                "check_type": "range",
+                "min_value": -40.0,
+                "max_value": 50.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "送风温度超出设备可解释范围"
+              }
+            ]
+          },
+          {
+            "field_id": "return_air_temperature",
+            "label": "箱内温度（回风）",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-RETURN-BASE",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "return_air_temperature",
+                "effect_operator": "engine_default",
+                "reference_field": "temperature_setpoint",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              },
+              {
+                "rule_id": "GEN-RETURN-DOOR",
+                "condition_variable": "transport_event",
+                "condition_operator": "equals",
+                "condition_value": "door_open",
+                "target_field": "return_air_temperature",
+                "effect_operator": "move_towards",
+                "reference_field": "ambient_temperature",
+                "coefficient_min": 0.08,
+                "coefficient_max": 0.15,
+                "duration_min_minutes": 10,
+                "duration_max_minutes": 30
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-RETURN-01",
+                "check_type": "range",
+                "min_value": -40.0,
+                "max_value": 50.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "箱内回风温度超出合理摄氏度范围"
+              },
+              {
+                "rule_id": "QC-RETURN-RATE",
+                "check_type": "max_change_rate",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": 8.0,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REVIEW",
+                "message": "箱内温度变化率过大，需复核事件或传感器"
+              }
+            ]
+          },
+          {
+            "field_id": "cargo_temperature",
+            "label": "货物温度",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-CARGO-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "cargo_temperature",
+                "effect_operator": "engine_default",
+                "reference_field": "return_air_temperature",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-CARGO-01",
+                "check_type": "range",
+                "min_value": -40.0,
+                "max_value": 50.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "货物温度超出合理摄氏度范围"
+              }
+            ]
+          },
+          {
+            "field_id": "ambient_temperature",
+            "label": "外界温度",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-AMBIENT-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "ambient_temperature",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-AMBIENT-01",
+                "check_type": "range",
+                "min_value": -25.0,
+                "max_value": 50.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "外界温度超出模板支持范围"
+              }
+            ]
+          },
+          {
+            "field_id": "relative_humidity",
+            "label": "相对湿度",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-RH-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "relative_humidity",
+                "effect_operator": "engine_default",
+                "reference_field": "ambient_temperature",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-RH-01",
+                "check_type": "range",
+                "min_value": 0.0,
+                "max_value": 100.0,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "相对湿度必须在 0–100%RH"
+              }
+            ]
+          },
+          {
+            "field_id": "gps",
+            "label": "GPS 位置",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-GPS-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "gps",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-GPS-01",
+                "check_type": "required",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [],
+                "severity": "REJECT",
+                "message": "GPS 经纬度不得整段缺失"
+              }
+            ]
+          },
+          {
+            "field_id": "power_status",
+            "label": "供电状态",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-POWER-01",
+                "condition_variable": "transport_event",
+                "condition_operator": "equals",
+                "condition_value": "power_off_short",
+                "target_field": "power_status",
+                "effect_operator": "set",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 30,
+                "duration_max_minutes": 180
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-POWER-01",
+                "check_type": "allowed_values",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [
+                  0,
+                  1
+                ],
+                "severity": "REJECT",
+                "message": "供电状态只允许 0 或 1"
+              }
+            ]
+          },
+          {
+            "field_id": "transport_event",
+            "label": "运输阶段与事件",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-EVENT-01",
+                "condition_variable": "always",
+                "condition_operator": "always",
+                "condition_value": null,
+                "target_field": "transport_event",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-EVENT-01",
+                "check_type": "allowed_values",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [
+                  "normal",
+                  "power_off_short",
+                  "door_open",
+                  "initial_warm_load",
+                  "blocked_airflow",
+                  "cooling_degradation",
+                  "sensor_bias",
+                  "vessel_delay",
+                  "network_offline",
+                  "defrost"
+                ],
+                "severity": "REJECT",
+                "message": "运输事件必须来自模板白名单或规则引擎派生事件"
+              }
+            ]
+          },
+          {
+            "field_id": "network_status",
+            "label": "联网状态",
+            "enabled": true,
+            "generation_rules": [
+              {
+                "rule_id": "GEN-NETWORK-01",
+                "condition_variable": "transport_stage",
+                "condition_operator": "equals",
+                "condition_value": "ocean",
+                "target_field": "network_status",
+                "effect_operator": "engine_default",
+                "reference_field": "",
+                "coefficient_min": 0.0,
+                "coefficient_max": 0.0,
+                "duration_min_minutes": 0,
+                "duration_max_minutes": 0
+              }
+            ],
+            "quality_rules": [
+              {
+                "rule_id": "QC-NETWORK-01",
+                "check_type": "allowed_values",
+                "min_value": null,
+                "max_value": null,
+                "max_rate_per_hour": null,
+                "reference_field": "",
+                "allowed_values": [
+                  0,
+                  1
+                ],
+                "severity": "REJECT",
+                "message": "联网状态只允许 0 或 1"
+              }
+            ]
+          }
+        ],
+        "rule_engine": {
+          "engine_id": "coldchain_physics_v1",
+          "user_code_allowed": false
+        }
+      },
+      "trial_run": {
+        "status": "PASS",
+        "source": "official_acceptance"
+      }
+    }
+  ]
+}
