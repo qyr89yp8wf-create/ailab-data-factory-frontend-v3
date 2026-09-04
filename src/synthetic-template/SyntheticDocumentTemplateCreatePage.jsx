@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert, Button, Card, Checkbox, Col, Descriptions, Empty, Flex, Form, Input, InputNumber,
-  Popconfirm, Row, Select, Space, Steps, Table, Tag, Typography, message,
+  Popconfirm, Row, Select, Space, Steps, Table, Tag, Typography, Upload, message,
 } from 'antd';
 import {
   ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOutlined, DeleteOutlined,
@@ -119,6 +119,7 @@ export function SyntheticDocumentTemplateCreatePage({ onBack, onPublished }) {
   const [action, setAction] = useState('');
   const [trial, setTrial] = useState(null);
   const [published, setPublished] = useState(null);
+  const [seedImage, setSeedImage] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -335,6 +336,14 @@ export function SyntheticDocumentTemplateCreatePage({ onBack, onPublished }) {
   ];
 
   const typeAndLayout = <Row gutter={18}>
+    <Col span={24}>
+      <Card size="small" title="种子图片" className="fictional-config-card">
+        <Upload accept="image/png,image/jpeg" maxCount={1} beforeUpload={() => false} showUploadList={false} onChange={({ file }) => { if (file) { setSeedImage(file); markChanged(); } }}>
+          <Button icon={<PlusOutlined/>}>{seedImage ? `已选择：${seedImage.name}` : '上传种子图片'}</Button>
+        </Upload>
+        <Text type="secondary" style={{ marginLeft: 10 }}>底图生成法可上传参考图片</Text>
+      </Card>
+    </Col>
     <Col span={13}>
       <Card size="small" title="基本信息" className="fictional-config-card">
         <Form.Item name="name" label="模板名称" rules={[{ required: true, message: '请输入模板名称' }, { max: 80 }]}><Input placeholder="例如：国内运单虚构训练模板 V1"/></Form.Item>

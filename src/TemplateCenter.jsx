@@ -195,6 +195,7 @@ function DocumentTemplateCreatePage({ onBack, onCreated, onUpdated }) {
         </Upload.Dragger>
       </Form.Item>}
       {businessType==='报关单'&&!!fileList.length&&<Card size="small" className="section-title" title="种子数据隐私检查与脱敏保护"><Progress percent={privacyProgress} status={privacyProgress<100?'active':'success'}/><Text type="secondary">{privacyProgress<100?'正在检测隐私字段并生成脱敏保护副本，完成前不能进入下一步。':'隐私检查与脱敏保护完成，后续流程使用受保护副本。'}</Text></Card>}
+      {businessType === '运单' && <Form.Item name="backgroundSeedFile" label="上传参考底图" valuePropName="fileList" getValueFromEvent={event => Array.isArray(event) ? event : event?.fileList} rules={[{ required: true, message: '请上传参考底图' }]}><Upload.Dragger accept=".png,.jpg,.jpeg,.webp,.bmp" maxCount={1} beforeUpload={() => false}><p className="ant-upload-drag-icon"><CloudUploadOutlined /></p><p>拖拽或点击选择底图</p><p className="ant-upload-hint">底图生成法将使用该图片作为参考</p></Upload.Dragger></Form.Item>}
       <Row gutter={16}>
         <Col span={12}><Form.Item name="imgsz" label="版面推理尺寸" tooltip={`种子图片尺寸：${imageDimensions||'待读取'}`} rules={[{required:true}]}><InputNumber min={320} max={4096} step={64} addonAfter="px" style={{width:'100%'}}/></Form.Item></Col>
         <Col span={12}><Form.Item name="conf" label={businessType === '运单' ? '区块置信度阈值' : '置信度阈值'} tooltip="不是准确率；越高返回框越少" rules={[{ required: true }]}><InputNumber min={0.01} max={1} step={0.05} precision={2} style={{ width: '100%' }}/></Form.Item></Col>
@@ -218,16 +219,11 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
   const [conversationDrafts, setConversationDrafts] = useState([]);
   const [coldChainTemplates, setColdChainTemplates] = useState([]);
   const [coldChainDrafts, setColdChainDrafts] = useState([]);
-  const [documentPrototypeRows,setDocumentPrototypeRows]=useState([
-    {key:'document-prototype/WAYBILL-DRAFT-20260901',id:'WAYBILL-DRAFT-20260901',name:'橙途速运运单模板',dataType:'文档类图像',businessType:'物流运单',method:'底图生成法',status:'草稿',publishable:true,processing:false,taskReferences:0,updatedAt:'2026-09-01 10:00:00',kind:'document-prototype',raw:{field_count:45,source_type:'waybill_mock'}},
-    {key:'document-prototype/TEMPLATE-DOC-WAYBILL-20260903',id:'TEMPLATE-DOC-WAYBILL-20260903',name:'物流运单安全底图模板',dataType:'文档类图像',businessType:'物流运单',method:'底图生成法',status:'已发布',publishable:false,processing:false,taskReferences:3,updatedAt:'2026-09-03 10:30:00',kind:'document-prototype',raw:{field_count:45,source_type:'waybill_mock',version:'V1'}},
-  ]);
   const [health, setHealth] = useState(null);
   const [error, setError] = useState('');
   const [createType, setCreateType] = useState(null);
   const [detail, setDetail] = useState(null);
   const [mockDetail, setMockDetail] = useState(null);
-  const [detailReadOnly,setDetailReadOnly]=useState(true);
   const [filter, setFilter] = useState('全部');
   const [statusFilter, setStatusFilter] = useState('全部');
   const [businessTypeFilter, setBusinessTypeFilter] = useState('全部');
@@ -235,10 +231,10 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
   const [conversationEditor, setConversationEditor] = useState(null);
   const [coldChainEditor, setColdChainEditor] = useState(null);
   useEffect(() => {
-    const subpage = createType ? '新建模板' : detail||mockDetail ? (detailReadOnly||mockDetail?._readOnly ? '模板详情' : '编辑模板') : conversationEditor ? (conversationEditor.readOnly ? '模板详情' : '编辑模板') : coldChainEditor ? (coldChainEditor.readOnly ? '模板详情' : '编辑模板') : false;
+    const subpage = createType ? '新建模板' : conversationEditor ? (conversationEditor.readOnly ? '模板详情' : '编辑模板') : coldChainEditor ? (coldChainEditor.readOnly ? '模板详情' : '编辑模板') : false;
     onCreatingChange?.(subpage);
-  }, [createType, detail, detailReadOnly, mockDetail, conversationEditor, coldChainEditor, onCreatingChange]);
-  useEffect(() => { if (!creating) { setCreateType(null);setDetail(null);setMockDetail(null);setConversationEditor(null);setColdChainEditor(null); } }, [creating]);
+  }, [createType, conversationEditor, coldChainEditor, onCreatingChange]);
+  useEffect(() => { if (!creating) { setCreateType(null); setConversationEditor(null); setColdChainEditor(null); } }, [creating]);
   const refresh = async () => {
     setError('');
     try {
@@ -277,20 +273,49 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
   };
   useEffect(() => { refresh(); }, []);
   const unifiedRows = useMemo(() => {
-    const documentMockDraftRows = documentPrototypeRows.map(row=>({...row,summary:`安全底图 · ${row.raw.field_count||45} 个字段`}));
+    const documentMockDraftRows = [
+      {
+        key: 'document-mock-draft/WAYBILL-DRAFT-20260901',
+        id: 'WAYBILL-DRAFT-20260901',
+        name: '橙途速运运单模板',
+        dataType: '文档类图像',
+        businessType: '国内运单',
+        status: '草稿',
+        publishable: false,
+        processing: false,
+        summary: '固定底图 · 45 个字段',
+        updatedAt: '2026-09-01 10:00:00',
+        kind: 'document-mock-draft',
+        raw: { _mockCatalog: true, field_count: 45, source_type: 'waybill_mock' },
+      },
+      {
+        key: 'document-mock-draft/CONTRACT-DRAFT-20260901',
+        id: 'CONTRACT-DRAFT-20260901',
+        name: '采购协议合同模板',
+        dataType: '文档类图像',
+        businessType: '合同',
+        status: '草稿',
+        publishable: false,
+        processing: false,
+        summary: 'Word 版式底图 · 36 个字段',
+        updatedAt: '2026-09-01 09:55:00',
+        kind: 'document-mock-draft',
+        raw: { _mockCatalog: true, field_count: 36, source_type: 'contract_mock' },
+      },
+    ];
     const documentDraftRows=jobs.filter(job=>!job.result?.published_template).map(job=>{
       const trialStatus=job.last_trial?.status||job.result?.trial_quality_status;
       const processing=!['completed','failed'].includes(job.status);
       const publishable=!processing&&job.status!=='failed'&&(job.result?.draft_status==='trial_completed'||['PASS','REVIEW'].includes(trialStatus));
-      return {key:`document-draft/${job.id}`,id:job.id,name:job.name,dataType:'文档类图像',businessType:job.business_type||'-',method:job._synthetic?'底图生成法':'版面分析法',status:'草稿',publishable,processing,taskReferences:0,summary:`${job.result?.cell_count||0} 格 · ${job.result?.field_count||0} 字段`,updatedAt:formatDateTime(job.updated_at||job.created_at),kind:'document-draft',raw:job};
+      return {key:`document-draft/${job.id}`,id:job.id,name:job.name,dataType:'文档类图像',businessType:job.business_type||'-',status:'草稿',publishable,processing,summary:`${job.result?.cell_count||0} 格 · ${job.result?.field_count||0} 字段`,updatedAt:formatDateTime(job.updated_at||job.created_at),kind:'document-draft',raw:job};
     });
-    const documentPublishedRows=templates.map(item=>({key:`document-published/${item.template_id}/${item.version}`,id:item.template_id,name:item.name,dataType:'文档类图像',businessType:item.business_type||'-',method:item.creation_method||item.template_method||(item.execution_engine?.includes('synthetic')?'底图生成法':'版面分析法'),status:'已发布',taskReferences:Number(item.task_reference_count??(item.scope==='official'?6:0)),summary:item.execution_engine==='customs_modular_monolith/v1'?`${item.capability_summary?.content_fields||'50+'} 字段 · 专用适配器`:`${item.cell_count||0} 格 · ${item.field_count||0} 字段`,updatedAt:formatDateTime(item.updated_at||item.created_at),kind:'document-published',raw:item}));
-    const conversationDraftRows=conversationDrafts.map(item=>({key:`conversation-draft/${item.draft_id}`,id:item.draft_id,name:item.name||item.configuration?.identity?.name||'未命名对话模板',dataType:'对话',businessType:item.business_type||item.configuration?.identity?.business_type||item.scenario_type||'智能客服',method:'-',status:'草稿',publishable:['PASS','REVIEW'].includes(item.trial_status),processing:false,taskReferences:0,summary:`${item.rule_card_count||0} 规则卡 · ${item.tool_count||0} 工具`,updatedAt:formatDateTime(item.updated_at),kind:'conversation-draft',raw:item}));
-    const conversationPublishedRows=conversationTemplates.map(item=>({key:`conversation-published/${item.template_id}/${item.version}`,id:item.template_id,name:item.name,dataType:'对话',businessType:item.business_type||item.scenario_type||'智能客服',method:'-',status:'已发布',taskReferences:Number(item.task_reference_count??2),summary:`${item.rule_card_count||0} 规则卡 · ${item.tool_count||0} 工具`,updatedAt:formatDateTime(item.updated_at),kind:'conversation-published',raw:item}));
-    const coldDraftRows=coldChainDrafts.map(item=>({key:`time-draft/${item.draft_id}`,id:item.draft_id,name:item.name,dataType:'时序',businessType:item.business_type||'传感器时序',method:'-',status:'草稿',publishable:item.trial_status==='PASS'||item.trial_run?.status==='PASS',processing:false,taskReferences:0,summary:`${item.field_count||item.configuration?.fields?.length||0} 字段 · ${item.coverage_profile_count||0} 标签组合`,updatedAt:formatDateTime(item.updated_at),kind:'time-draft',raw:item}));
-    const coldPublishedRows=coldChainTemplates.map(item=>({key:`time-published/${item.template_id}/${item.version}`,id:item.template_id,name:item.name,dataType:'时序',businessType:item.business_type||'传感器时序',method:'-',status:'已发布',taskReferences:Number(item.task_reference_count??(item.scope==='official'?5:0)),summary:`${item.parameter_count||0} 字段 · ${(item.generation_rule_count||0)+(item.quality_rule_count||0)} 规则`,updatedAt:formatDateTime(item.updated_at),kind:'time-published',raw:item}));
-    return [...documentMockDraftRows,...documentDraftRows,...documentPublishedRows,...conversationDraftRows,...conversationPublishedRows,...coldDraftRows,...coldPublishedRows].filter(row=>!String(row.businessType||'').includes('合同')).sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
-  },[jobs,templates,conversationDrafts,conversationTemplates,coldChainDrafts,coldChainTemplates,documentPrototypeRows]);
+    const documentPublishedRows=templates.map(item=>({key:`document-published/${item.template_id}/${item.version}`,id:item.template_id,name:item.name,dataType:'文档类图像',businessType:item.business_type||'-',status:'已发布',summary:item.execution_engine==='customs_modular_monolith/v1'?`${item.capability_summary?.content_fields||'50+'} 字段 · 专用适配器`:`${item.cell_count||0} 格 · ${item.field_count||0} 字段`,updatedAt:formatDateTime(item.updated_at||item.created_at),kind:'document-published',raw:item}));
+    const conversationDraftRows=conversationDrafts.map(item=>({key:`conversation-draft/${item.draft_id}`,id:item.draft_id,name:item.name||item.configuration?.identity?.name||'未命名对话模板',dataType:'对话',businessType:item.business_type||item.configuration?.identity?.business_type||item.scenario_type||'智能客服',status:'草稿',publishable:['PASS','REVIEW'].includes(item.trial_status),processing:false,summary:`${item.rule_card_count||0} 规则卡 · ${item.tool_count||0} 工具`,updatedAt:formatDateTime(item.updated_at),kind:'conversation-draft',raw:item}));
+    const conversationPublishedRows=conversationTemplates.map(item=>({key:`conversation-published/${item.template_id}/${item.version}`,id:item.template_id,name:item.name,dataType:'对话',businessType:item.business_type||item.scenario_type||'智能客服',status:'已发布',summary:`${item.rule_card_count||0} 规则卡 · ${item.tool_count||0} 工具`,updatedAt:formatDateTime(item.updated_at),kind:'conversation-published',raw:item}));
+    const coldDraftRows=coldChainDrafts.map(item=>({key:`time-draft/${item.draft_id}`,id:item.draft_id,name:item.name,dataType:'时序',businessType:item.business_type||'传感器时序',status:'草稿',publishable:item.trial_status==='PASS',processing:false,summary:`${item.field_count||0} 字段 · ${item.coverage_profile_count||0} 标签组合`,updatedAt:formatDateTime(item.updated_at),kind:'time-draft',raw:item}));
+    const coldPublishedRows=coldChainTemplates.map(item=>({key:`time-published/${item.template_id}/${item.version}`,id:item.template_id,name:item.name,dataType:'时序',businessType:item.business_type||'传感器时序',status:'已发布',summary:`${item.parameter_count||0} 字段 · ${(item.generation_rule_count||0)+(item.quality_rule_count||0)} 规则`,updatedAt:formatDateTime(item.updated_at),kind:'time-published',raw:item}));
+    return [...documentMockDraftRows,...documentDraftRows,...documentPublishedRows,...conversationDraftRows,...conversationPublishedRows,...coldDraftRows,...coldPublishedRows].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  },[jobs,templates,conversationDrafts,conversationTemplates,coldChainDrafts,coldChainTemplates]);
   const businessTypeOptions=useMemo(()=>[...new Set(unifiedRows.map(row=>row.businessType).filter(Boolean))].sort(),[unifiedRows]);
   const filteredRows=useMemo(()=>unifiedRows.filter(row=>(filter==='全部'||row.dataType===filter)&&(statusFilter==='全部'||row.status===statusFilter)&&(businessTypeFilter==='全部'||row.businessType===businessTypeFilter)&&(!query||row.name.includes(query)||row.id.includes(query)||row.businessType.includes(query))),[unifiedRows,filter,statusFilter,businessTypeFilter,query]);
   const updateJob = updated => {
@@ -299,12 +324,12 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
     if (updated.result?.published_template) refresh();
   };
   const showTemplateDetail = row => {
-    if(row.kind==='document-prototype') { setMockDetail({...row,_readOnly:true}); return; }
+    if(row.kind==='document-mock-draft') { setMockDetail(row); return; }
     if(row.kind==='conversation-draft') { setConversationEditor({draftId:row.raw.draft_id, readOnly:true}); return; }
     if(row.kind==='conversation-published') { setConversationEditor({template:row.raw, readOnly:true}); return; }
     if(row.kind.startsWith('time-')) { setColdChainEditor({template:row.raw, readOnly:true}); return; }
-    if(row.kind==='document-draft') { setDetailReadOnly(true);setDetail(row.raw); return; }
-    if(row.kind==='document-published' && row.raw.source_job_id) { templateApi.getJob(row.raw.source_job_id).then(value=>{setDetailReadOnly(true);setDetail(value);}).catch(error=>message.error(error.message)); return; }
+    if(row.kind==='document-draft') { setDetail(row.raw); return; }
+    if(row.kind==='document-published' && row.raw.source_job_id) { templateApi.getJob(row.raw.source_job_id).then(setDetail).catch(error=>message.error(error.message)); return; }
     Modal.info({
     title: row.name || '模板详情',width:680,okText:'关闭',
     content:<Descriptions bordered size="small" column={2} className="section-title" items={[
@@ -336,15 +361,13 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
     onOk:()=>{setJobs(current=>current.filter(item=>item.id!==row.id));message.success('模板制作记录已删除');},
   });
   const editUnified=row=>{
-    if(row.kind==='document-prototype')setMockDetail({...row,_readOnly:false});
-    if(row.kind==='document-draft'){setDetailReadOnly(false);setDetail(row.raw);}
+    if(row.kind==='document-draft')setDetail(row.raw);
     if(row.kind==='conversation-draft')setConversationEditor({draftId:row.raw.draft_id});
     if(row.kind==='conversation-published')setConversationEditor({template:row.raw});
     if(row.kind==='time-draft')setColdChainEditor(row.raw.draft_id);
   };
   const publishUnified=async row=>{
     try{
-      if(row.kind==='document-prototype'){setDocumentPrototypeRows(current=>current.map(item=>item.id===row.id?{...item,id:`TEMPLATE-DOC-WAYBILL-${Date.now()}`,key:`document-prototype/TEMPLATE-DOC-WAYBILL-${Date.now()}`,status:'已发布',publishable:false,updatedAt:nowDateTime(),raw:{...item.raw,version:'V1'}}:item));message.success(`模板“${row.name}”已发布`);return;}
       if(row.kind==='document-draft')await publishTemplate(row.raw);
       if(row.kind==='conversation-draft')await conversationApi.publishTemplateDraft(row.raw.draft_id,{expected_revision:row.raw.revision});
       if(row.kind==='time-draft')await coldchainApi.publishTemplateDraft(row.raw.draft_id,row.raw.revision);
@@ -352,7 +375,6 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
     }catch(publishError){message.error(publishError.message);}
   };
   const copyUnified=async row=>{
-    if(row.kind==='document-prototype'){const now=Date.now();setDocumentPrototypeRows(current=>[{...row,id:`WAYBILL-DRAFT-COPY-${now}`,key:`document-prototype/WAYBILL-DRAFT-COPY-${now}`,name:`${row.name}（副本）`,status:'草稿',publishable:true,taskReferences:0,updatedAt:nowDateTime(),raw:{...row.raw,version:undefined}},...current]);message.success('模板已复制为草稿');return;}
     if(row.kind.startsWith('document-')){copyTemplate(row.raw);return;}
     if(row.kind==='conversation-published'){try{await conversationApi.cloneTemplate(row.raw.template_id,`${row.name}（副本）`);message.success('模板已复制为草稿');refresh();}catch(error){message.error(error.message);}return;}
     const now=Date.now();
@@ -360,8 +382,7 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
     if(row.kind.startsWith('time-'))setColdChainDrafts(current=>[{...row.raw,draft_id:`DRAFT-COPY-${now}`,name:`${row.name}（副本）`,trial_status:null,_prototypeCopy:true},...current]);
     message.success('模板已复制为草稿');
   };
-  const deleteUnified=row=>Modal.confirm({title:`删除模板“${row.name}”？`,content:row.status==='草稿'?'删除后该草稿及未发布配置将从模板中心移除，此操作不可撤销。':'该已发布模板当前没有任务引用，删除后不可恢复。',okText:'确认删除',okType:'danger',cancelText:'取消',onOk:()=>{
-    if(row.kind==='document-prototype')setDocumentPrototypeRows(current=>current.filter(item=>item.id!==row.id));
+  const deleteUnified=row=>Modal.confirm({title:`删除模板“${row.name}”？`,content:'正式产品中删除前需要检查任务引用；当前原型只从列表移除该记录。',okText:'确认删除',okType:'danger',cancelText:'取消',onOk:()=>{
     if(row.kind==='document-draft')setJobs(current=>current.filter(item=>item.id!==row.raw.id));
     if(row.kind==='document-published')setTemplates(current=>current.filter(item=>!(item.template_id===row.raw.template_id&&item.version===row.raw.version)));
     if(row.kind==='conversation-draft')setConversationDrafts(current=>current.filter(item=>item.draft_id!==row.raw.draft_id));
@@ -374,11 +395,9 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
     {title:'模板名称 / ID',dataIndex:'name',width:270,render:(value,row)=><div><Text strong>{value}</Text><div><Text type="secondary">{row.id}</Text></div></div>},
     {title:'数据类型',dataIndex:'dataType',width:120,render:value=><Tag color={value==='文档类图像'?'blue':value==='对话'?'geekblue':'green'}>{value}</Tag>},
     {title:'业务类型',dataIndex:'businessType',width:150},
-    {title:'模板制作方式',dataIndex:'method',width:140},
-    {title:'任务引用',dataIndex:'taskReferences',width:110,render:value=>Number(value||0).toLocaleString()},
     {title:'状态',dataIndex:'status',width:110,render:value=><Tag color={value==='已发布'?'green':'blue'}>{value}</Tag>},
     {title:'更新时间',dataIndex:'updatedAt',width:185},
-    {title:'操作',fixed:'right',width:300,render:(_,row)=>{const isDraft=row.status==='草稿';const canEdit=isDraft&&!row.processing;const canPublish=isDraft&&!row.processing;const canCopy=!row.processing;const canDelete=!row.processing&&(isDraft||Number(row.taskReferences||0)===0);return <TemplateActionButtons onDetail={()=>showTemplateDetail(row)} onEdit={()=>editUnified(row)} onPublish={()=>publishUnified(row)} onCopy={()=>copyUnified(row)} onDelete={()=>deleteUnified(row)} canEdit={canEdit} canPublish={canPublish} canCopy={canCopy} canDelete={canDelete} editReason={row.status==='已发布'?'已发布模板不可编辑，请复制后修改':'当前草稿仍在处理中'} publishReason={row.status==='已发布'?'该模板已经发布':'当前草稿仍在处理中'} deleteReason={row.status==='已发布'&&Number(row.taskReferences||0)>0?`已有 ${row.taskReferences} 个任务引用，不能删除`:'当前状态不可删除'}/>;}},
+    {title:'操作',fixed:'right',width:300,render:(_,row)=>{const isMockCatalog=Boolean(row.raw._mockCatalog);const canEdit=['document-draft','conversation-draft','conversation-published','time-draft'].includes(row.kind)&&!row.raw._synthetic&&!row.raw._prototypeCopy&&!row.processing;const canDelete=!isMockCatalog&&!row.processing&&row.raw.scope!=='official'&&row.raw.execution_engine!=='customs_modular_monolith/v1';return <TemplateActionButtons onDetail={()=>showTemplateDetail(row)} onEdit={()=>editUnified(row)} onPublish={()=>publishUnified(row)} onCopy={()=>copyUnified(row)} onDelete={()=>deleteUnified(row)} canEdit={canEdit} canPublish={Boolean(row.publishable)} canCopy={!isMockCatalog&&!row.processing} canDelete={canDelete} editReason={isMockCatalog?'当前为内置 Mock 草稿记录，仅用于查看':row.status==='已发布'?'已发布版本不可直接编辑，请复制后修改':'当前草稿仍在处理中'} publishReason={row.status==='已发布'?'该版本已经发布':'试运行通过后才能发布'} copyReason="当前为内置 Mock 草稿记录" deleteReason="系统内置或 Mock 模板不可删除"/>;}},
   ];
   const createMenuItems = taskTypes.map(item => ({
     key: item.value,
@@ -386,7 +405,8 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
     disabled: !item.enabled,
     label: <Space direction="vertical" size={0}><Text>{item.label}</Text><Text type="secondary" style={{ fontSize: 12 }}>{item.enabled ? item.description : '后续开放'}</Text></Space>,
   }));
-  if(mockDetail?.raw?.source_type==='waybill_mock')return <WaybillSeedMockEditor fileName="物流运单安全底图" templateName={mockDetail.name} businessType="底图生成法" description={mockDetail.status} onBack={()=>setMockDetail(null)} readOnly={Boolean(mockDetail._readOnly)}/>;
+  if(mockDetail?.raw?.source_type==='waybill_mock')return <WaybillSeedMockEditor fileName="橙途速运固定安全底图" onBack={()=>setMockDetail(null)} readOnly/>;
+  if(mockDetail?.raw?.source_type==='contract_mock')return <ContractSeedMockEditor fileName="01_采购协议模板.docx" onBack={()=>setMockDetail(null)} readOnly/>;
   if(coldChainEditor)return <ColdChainTemplateEditor draftId={typeof coldChainEditor==='string'?coldChainEditor:undefined} template={coldChainEditor?.template} readOnly={Boolean(coldChainEditor?.readOnly)} onClose={()=>{setColdChainEditor(null);refresh();}} onPublished={()=>{setColdChainEditor(null);refresh();}}/>;
   if(conversationEditor)return <ConversationTemplateEditor open presentation="page" template={conversationEditor.template} draftId={conversationEditor.draftId} readOnly={Boolean(conversationEditor.readOnly)} onClose={()=>{setConversationEditor(null);refresh();}} onSaved={()=>{setConversationEditor(null);refresh();}}/>;
   if (createType === 'document_image') return <DocumentTemplateCreatePage
@@ -413,7 +433,7 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
       <Flex justify="space-between" align="center" className="toolbar"><Space><Segmented value={filter} onChange={value=>{setFilter(value);setBusinessTypeFilter('全部');}} options={['全部','文档类图像','对话','时序']}/><Select value={statusFilter} onChange={setStatusFilter} style={{width:150}} options={['全部','草稿','已发布'].map(value=>({label:value==='全部'?'全部状态':value,value}))}/><Select value={businessTypeFilter} onChange={setBusinessTypeFilter} style={{width:170}} options={[{label:'全部业务类型',value:'全部'},...businessTypeOptions.map(value=>({label:value,value}))]}/></Space><Input allowClear prefix={<SearchOutlined/>} placeholder="搜索模板名称、ID或业务类型" value={query} onChange={event=>setQuery(event.target.value)} style={{width:280}}/></Flex>
       <Table rowKey="key" dataSource={filteredRows} columns={columns} scroll={{x:1360}} pagination={{pageSize:8,showTotal:total=>`共 ${total} 条`}}/>
     </Card>
-    {detail?._synthetic ? <div className="template-editor-page"><Flex className="page-header" justify="space-between"><Space><Button type="text" icon={<LeftOutlined/>} aria-label="返回模板中心" onClick={()=>setDetail(null)}/><Title level={2}>{detailReadOnly?'文档类图像模板详情':'编辑文档类图像模板'}</Title></Space></Flex><Card className="main-card" title="底图生成法模板配置">
+    {detail?._synthetic ? <Drawer title="虚构文档模板草稿" size={760} open onClose={() => setDetail(null)}>
       <Alert type="info" showIcon message="这是独立的虚构合成模板制作记录" description="该流程不上传或复刻种子图片；模板只保存程序化版式、字段规则与安全图案。"/>
       <Descriptions bordered size="small" column={2} className="section-title" items={[
         {key:'id',label:'任务 ID',children:<Text copyable>{detail.id}</Text>},
@@ -424,6 +444,6 @@ export function TemplateCenter({ onCreatingChange, creating = false }) {
         {key:'objects',label:'模板对象',span:2,children:`${detail.result?.cell_count || 0} 个单元格 / ${detail.result?.text_count || 0} 个文字对象 / ${detail.result?.field_count || 0} 个动态字段`},
       ]}/>
       {detail.last_trial && <><Title level={5}>最近一次试运行</Title><Space wrap><Tag color={detail.last_trial.status==='PASS'?'green':detail.last_trial.status==='REJECT'?'red':'gold'}>{detail.last_trial.status}</Tag>{Object.entries(detail.artifact_urls||{}).map(([key,url])=><Button key={key} href={syntheticTemplateApi.artifactUrl(url)} target="_blank">{key}</Button>)}</Space></>}
-    </Card></div> : detail && <TemplateEditor job={detail} open presentation="page" readOnly={detailReadOnly} onClose={() => setDetail(null)} onUpdated={updateJob}/>} 
+    </Drawer> : detail && <TemplateEditor job={detail} open readOnly onClose={() => setDetail(null)} onUpdated={updateJob}/>} 
   </>;
 }

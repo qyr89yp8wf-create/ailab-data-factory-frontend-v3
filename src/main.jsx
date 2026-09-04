@@ -157,6 +157,8 @@ const initialDatasets = [
   ]}
 ];
 
+initialDatasets.push({ id:6, name:'用户上传文档样例数据集', modality:'文档类图像', businessType:'报关单', status:'可用', desc:'用户上传并完成隐私检查与自动脱敏的数据集。系统仅保存脱敏后的数据。', defaultVersion:'A7F3C91D2E44', totalSamples:1280, reference:false, sourceType:'用户上传', templateId:'TPL-DOC-CUSTOMS-V1', templateVersion:'V1', updatedAt:'2026-09-04 10:30:00', versions:[{ id:'A7F3C91D2E44', version:'A7F3C91D2E44', note:'用户上传数据集首个脱敏版本', source:'UPLOAD-20260904-103000', sourceName:'用户上传与隐私脱敏', samples:1280, created:'2026-09-04 10:30:00', updatedAt:'2026-09-04 10:30:00', consumers:[], sourceType:'用户上传', templateId:'TPL-DOC-CUSTOMS-V1', templateVersion:'V1', privacyCheck:{status:'通过', checked:1280, desensitized:37, rules:['身份证号','手机号','地址']}, qualityReport:{status:'待质检', checkedSampleCount:0} }]});
+
 const VERSION_ID_PATTERN = /^[0-9A-F]{12}$/;
 const DATASET_ID_PATTERN = /^DATASET-\d{8}-\d{4}$/;
 
@@ -1562,6 +1564,8 @@ const uploadEntryPath = entry => String(entry?.originFileObj?.webkitRelativePath
 const uploadEntryText = async entry => entry?.originFileObj?.text ? entry.originFileObj.text() : entry?.text ? entry.text() : '';
 
 async function validateUploadFolder(modality, fileList) {
+  // 纯前端演示：不读取或解析用户文件，选择任意文件夹即视为通过。
+  return { status: 'passed', message: 'Mock 格式校验通过（演示模式）' };
   const files = (fileList || []).filter(item => item?.name && !item.name.startsWith('.'));
   if (!modality) return { status: 'idle', message: '请先选择数据类型' };
   if (!files.length) return { status: 'idle', message: '选择文件夹后将自动校验格式' };
@@ -1805,7 +1809,7 @@ function DataCenter({ datasets, setDatasets, uploading, onUploadingChange, onSta
   ];
   const versionColumns=detail?[
     {title:'版本 ID',dataIndex:'version',width:150,render:value=><Text code copyable>{value}</Text>},{title:'版本描述',dataIndex:'note',width:230},{title:'数据量',dataIndex:'samples',width:120,render:value=>numericSampleCount(value).toLocaleString()},
-    {title:'来源任务',width:230,render:(_,version)=><Button type="link" className="trace-link" onClick={()=>setSourceTaskDetail({id:version.source,name:version.sourceName,taskType:version.versionKind==='上传脱敏'?'上传处理':version.versionKind,updatedAt:version.updatedAt,inputVersionId:version.sourceVersionId,outputVersionId:version.version})}><div><span>{version.sourceName||'-'}</span><div className="muted-id">{version.source||'-'}</div></div></Button>},
+    {title:'来源任务',width:230,render:(_,version)=>version.sourceType==='用户上传'?'-':<Button type="link" className="trace-link" onClick={()=>setSourceTaskDetail({id:version.source,name:version.sourceName,taskType:version.versionKind,updatedAt:version.updatedAt,inputVersionId:version.sourceVersionId,outputVersionId:version.version})}><div><span>{version.sourceName||'-'}</span><div className="muted-id">{version.source||'-'}</div></div></Button>},
     {title:'来源数据集版本',width:250,render:(_,version)=>version.sourceVersionId?<Button type="link" className="trace-link" onClick={()=>{const sourceDataset=datasets.find(item=>item.id===version.sourceDatasetId)||detail;const sourceVersion=sourceDataset?.versions.find(item=>item.version===version.sourceVersionId);if(sourceVersion)setVersionDetail({dataset:sourceDataset,version:sourceVersion});}}><div><span>{(datasets.find(item=>item.id===version.sourceDatasetId)||detail)?.name}</span><div className="muted-id">{version.sourceVersionId}</div></div></Button>:'-'},
     {title:'更新时间',dataIndex:'updatedAt',width:185,render:formatDateTime},
     {title:'操作',fixed:'right',width:430,render:(_,version)=>{const canQuality=Boolean(version.templateId);const canEnhance=isFullQualityVersion(version);const canExpand=canEnhance;const hasCoverageGaps=Boolean(version.qualityReport?.coverageGaps?.length);return <Space size={0} className="dataset-version-actions"><Button type="link" size="small" onClick={()=>setVersionDetail({dataset:detail,version})}>详情</Button><Button type="link" size="small" href={downloadUrl(detail,version)} download={`${detail.name}-${version.version}.json`}>下载</Button><Button type="link" size="small" disabled={!canQuality} title={canQuality?'按绑定模板发起全量或部分质检':'该版本缺少模板血缘，请先绑定模板'} onClick={()=>startVersionTask(detail,version,'数据质检')}>质检</Button><Button type="link" size="small" disabled={!canEnhance} title={canEnhance?'基于正式全量质检结果发起增强':'部分抽检不能作为下游准入依据，请先完成正式全量质检'} onClick={()=>startVersionTask(detail,version,'数据增强')}>增强</Button><Button type="link" size="small" disabled={!canExpand} title={canExpand?(hasCoverageGaps?'基于覆盖缺口或自定义设置发起扩增':'当前无系统覆盖缺口，可使用自定义扩增设置'):'需先完成正式全量质检'} onClick={()=>startVersionTask(detail,version,'定向扩增')}>扩增</Button><Button type="link" size="small" danger onClick={()=>deleteVersion(detail,version)}>删除</Button></Space>;}},
