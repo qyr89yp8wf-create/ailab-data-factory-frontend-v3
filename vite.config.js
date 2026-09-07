@@ -4,7 +4,7 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  base: '/ailab-data-factory-frontend-v3/',
   build: {
     rollupOptions: {
       input: {
