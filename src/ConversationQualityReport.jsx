@@ -47,6 +47,9 @@ export function ConversationQualityReportPage({ jobId }) {
     return [...keys].sort().map(profile => ({ key: profile, profile, before: initial.profile_pass_counts?.[profile] || 0, after: final.profile_pass_counts?.[profile] || 0 }));
   }, [initial, final]);
   const artifacts = result.artifact_urls || {};
+  const categoryRows = Object.entries(final.category_summary || {}).map(([key, value]) => ({ key, ...value }));
+  const basicStatisticsRows = Object.entries(final.basic_statistics || {}).map(([scope, value]) => ({ key: scope, scope: scope === 'whole' ? '整段对话' : scope === 'user' ? 'User 消息' : 'Assistant 消息', ...value }));
+  const ragMetrics = final.rag_metrics || {};
 
   if (error) return <main className="quality-report-page"><Alert type="error" showIcon message="无法打开智能客服质检报告" description={error}/><Button className="section-title" href="/" icon={<ArrowLeftOutlined/>}>返回产品</Button></main>;
   if (!job) return <main className="quality-report-page"><Skeleton active paragraph={{ rows: 12 }}/></main>;
@@ -62,7 +65,7 @@ export function ConversationQualityReportPage({ jobId }) {
     </Flex>
 
     <section className="quality-report-hero conversation-report-hero">
-      <Space><SafetyCertificateOutlined/><Text>事实/状态/工具/证据校验 · 隐私脱敏 · 语义质检 · 覆盖驱动扩增</Text></Space>
+      <Space><SafetyCertificateOutlined/><Text>Dingo 基础质检 · 基础统计 · 独立隐私质检 · 业务契约 · 自定义质检</Text></Space>
       <Title>智能客服对话质检与扩增报告</Title>
       <Paragraph>任务 {job.id} · 场景 {result.scenario_name} · Provider {result.generation?.provider}</Paragraph>
       <Alert type="success" showIcon icon={<CheckCircleOutlined/>} message="完整链路已完成" description={`初始 ${result.generation?.initial_count || 0} 条，定向扩增后 ${result.generation?.final_count || 0} 条；最终 ${result.delivery?.pass || 0} 条进入训练集。`}/>
@@ -71,6 +74,12 @@ export function ConversationQualityReportPage({ jobId }) {
     <Row gutter={[16, 16]} className="quality-report-status-row">
       {['PASS', 'REVIEW', 'REJECT'].map(status => <Col span={8} key={status}><StatusCard status={status} count={counts[status]} total={total}/></Col>)}
     </Row>
+
+    <Card className="quality-report-section" title="五类质检结果" extra={<Tag color="blue">Dingo + 系统规则并集</Tag>}>
+      <Row gutter={[12,12]}>{categoryRows.map(item => <Col span={Math.max(4, Math.floor(24 / Math.max(categoryRows.length, 1)))} key={item.key}><Card size="small"><Text type="secondary">{item.label}</Text><Title level={4}>{item.rule_count || 0} 项</Title><Space size={4} wrap><Tag color="green">PASS {item.pass || 0}</Tag>{Boolean(item.review) && <Tag color="orange">REVIEW {item.review}</Tag>}{Boolean(item.block) && <Tag color="red">BLOCK {item.block}</Tag>}{Boolean(item.info) && <Tag color="blue">INFO {item.info}</Tag>}</Space></Card></Col>)}</Row>
+    </Card>
+
+    {(final.evaluator_errors || []).length > 0 && <Alert className="quality-report-section" type="error" showIcon message="检测器执行错误" description={(final.evaluator_errors || []).map(item => `${item.rule_id || item.engine}：${item.message}`).join('；')}/>} 
 
     <Card className="quality-report-section" title="核心质量指标" extra={<Tag color="success">平均分 {final.average_score || 0}</Tag>}>
       <Row gutter={[12, 12]}>
@@ -81,6 +90,22 @@ export function ConversationQualityReportPage({ jobId }) {
       </Row>
     </Card>
 
+    <Row gutter={[16,16]}>
+      <Col span={14}><Card className="quality-report-section" title="基础统计（按作用域）"><Table pagination={false} size="small" rowKey="key" dataSource={basicStatisticsRows} columns={[
+        {title:'作用域',dataIndex:'scope'},
+        {title:'平均有效字符',dataIndex:'chars_avg',align:'right'},
+        {title:'P95 字符',dataIndex:'chars_p95',align:'right'},
+        {title:'平均词数',dataIndex:'words_avg',align:'right'},
+        {title:'超长句占比',dataIndex:'long_sentence_rate',align:'right',render:percent},
+      ]}/></Card></Col>
+      <Col span={10}><Card className="quality-report-section" title="对话与事件 / 证据语义指标"><Descriptions bordered size="small" column={1} items={[
+        {key:'context',label:'Context Relevancy',children:<><Text strong>{ragMetrics.context_relevancy ?? '-'}</Text> / 10</>},
+        {key:'answer',label:'Answer Relevancy',children:<><Text strong>{ragMetrics.answer_relevancy ?? '-'}</Text> / 10</>},
+        {key:'faithfulness',label:'Faithfulness',children:<><Text strong>{ragMetrics.faithfulness ?? '-'}</Text> / 10</>},
+        {key:'threshold',label:'通过阈值',children:`≥ ${ragMetrics.threshold ?? 7}`},
+      ]}/></Card></Col>
+    </Row>
+
     <Card className="quality-report-section" title="隐私检查与自动脱敏" extra={<Tag color={Number(final.privacy_risk_count||0)?'error':'success'}>{Number(final.privacy_risk_count||0)?'存在残留风险':'PASS'}</Tag>}>
       <Row gutter={[12,12]}>
         <Col span={8}><Statistic title="初检隐私风险" value={Number(initial.privacy_risk_count||0)} suffix="项"/></Col>
@@ -88,6 +113,7 @@ export function ConversationQualityReportPage({ jobId }) {
         <Col span={8}><Statistic title="复检残留风险" value={Number(final.privacy_risk_count||0)} suffix="项"/></Col>
       </Row>
       <Table className="section-title" pagination={false} size="small" rowKey="key" dataSource={PRIVACY_ROWS} columns={[{title:'检查项目',dataIndex:'types'},{title:'系统默认掩码',dataIndex:'mask'},{title:'结果',render:()=>Number(final.privacy_risk_count||0)?'存在残留风险':'未检出残留风险'}]}/>
+      <Alert className="section-title" type="info" showIcon message="报告不输出隐私原文" description={`类型统计：${Object.entries(result.privacy?.type_counts || {}).map(([key,value]) => `${key} ${value}`).join(' / ') || '无命中'}；原文导出：${result.privacy?.raw_value_exported ? '是' : '否'}`}/>
     </Card>
 
     <Row gutter={[16, 16]}>
@@ -121,6 +147,8 @@ export function ConversationQualityReportPage({ jobId }) {
       {artifacts.initial_quality_report && <Button href={artifacts.initial_quality_report} target="_blank">初次质检 MD</Button>}
       {artifacts.final_quality_report && <Button href={artifacts.final_quality_report} target="_blank">扩增后质检 MD</Button>}
       {artifacts.quality_comparison && <Button href={artifacts.quality_comparison} target="_blank">前后对比 MD</Button>}
+      {artifacts.dingo_raw_results && <Button href={artifacts.dingo_raw_results} target="_blank">Dingo 原始结果 JSON</Button>}
+      {artifacts.quality_rule_manifest && <Button href={artifacts.quality_rule_manifest} target="_blank">规则版本清单</Button>}
       {artifacts.train_pass && <Button type="primary" href={artifacts.train_pass} download>下载 PASS JSONL</Button>}
       {artifacts.review && <Button href={artifacts.review} download>下载 REVIEW JSONL</Button>}
       {artifacts.manifest && <Button href={artifacts.manifest} target="_blank">查看 manifest</Button>}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Button, Card, Checkbox, Col, Descriptions, Divider, Drawer, Empty, Flex,
+  Alert, Button, Card, Checkbox, Col, Collapse, Descriptions, Divider, Drawer, Empty, Flex,
   Dropdown, Image, Input, InputNumber, List, Modal, Progress, Row, Select, Slider, Space,
   Spin, Steps, Switch, Table, Tag, Tooltip, Typography, Upload, message,
 } from 'antd';
@@ -343,7 +343,126 @@ function PropertyPanel({ draft, selection, onDraftChange, jobId, onAssetUpload, 
   </Card><Modal title="安全印章示例" open={stampPreviewOpen} onCancel={()=>setStampPreviewOpen(false)} footer={<Button type="primary" onClick={()=>setStampPreviewOpen(false)}>确认</Button>}><div style={{height:280,display:'grid',placeItems:'center',background:'#fafafa'}}><div style={{width:210,height:210,border:'8px double #d4380d',borderRadius:'50%',display:'grid',placeItems:'center',color:'#d4380d',fontWeight:700,textAlign:'center',transform:'rotate(-8deg)'}}>合成示例机构<br/><span style={{fontSize:58}}>✡</span><br/>仅供模型训练</div></div></Modal><Modal title="模拟合成素材" open={materialOpen} onCancel={()=>setMaterialOpen(false)} footer={materialReady?<Space><Button onClick={()=>setMaterialOpen(false)}>取消</Button><Button type="primary" onClick={()=>{updateAssetGenerator({asset_source:'synthetic_visual_model',asset_path:'mock://synthetic-asset',original_filename:'synthetic-asset.png'});setMaterialOpen(false);message.success('已作为固定合成素材使用');}}>确认使用</Button></Space>:null}><Text type="secondary">视觉模型</Text><Select value="qwen-image" style={{width:'100%',marginBottom:12}} options={[{value:'qwen-image',label:'Qwen Image'}]}/><Text type="secondary">生成 Prompt</Text><Input.TextArea rows={5} value={materialPrompt} onChange={event=>setMaterialPrompt(event.target.value)}/><Button className="section-title" type="primary" onClick={()=>{setMaterialProgress(10);setMaterialReady(false);let value=10;const timer=setInterval(()=>{value=Math.min(100,value+18);setMaterialProgress(value);if(value>=100){clearInterval(timer);setMaterialReady(true);}},120);}}>生成</Button>{materialProgress>0&&<Progress percent={materialProgress} status={materialProgress<100?'active':'success'}/>} {materialReady&&<div style={{height:180,display:'grid',placeItems:'center',background:'linear-gradient(135deg,#e6f4ff,#f9f0ff)',borderRadius:8,fontSize:64}}>◈</div>}</Modal></>;
 }
 
+const DOCUMENT_BASE_QUALITY_RULES = [
+  ['DINGO-IMAGE-DATA-FORMAT','文件格式合法性','样本','Dingo · RuleImageDataFormat','BLOCK','检查文件扩展名、实际编码与允许格式是否一致。'],
+  ['DINGO-IMAGE-VALID','文件/记录可读取性','样本','Dingo · RuleImageValid','BLOCK','检查图像是否损坏、空文件或无法解码。'],
+  ['DINGO-IMAGE-WHITE-BLACK','纯白/纯黑图检测','样本','Dingo · RuleImageValid','BLOCK','识别无有效内容的纯白图、纯黑图。'],
+  ['DINGO-IMAGE-SIZE','图像尺寸合法性','样本','Dingo · RuleImageSizeValid','BLOCK','检查宽高、长宽比及最小分辨率。'],
+  ['BASE-FILE-SIZE','文件大小合法性','样本','系统规则','BLOCK','检查文件体积是否位于模板允许范围。'],
+  ['BASE-COLOR-MODE','颜色模式合法性','样本','系统规则','REVIEW','检查灰度、RGB、RGBA 等颜色模式是否符合配置。'],
+  ['BASE-FRAME-COUNT','页数/帧数合法性','样本','系统规则','BLOCK','检查单页图、多页 TIFF 等页数或帧数约束。'],
+  ['BASE-ORIENTATION-METADATA','方向元数据合法性','样本','系统规则','REVIEW','检查 EXIF 方向与实际像素方向是否一致。'],
+  ['BASE-ALPHA-CHANNEL','透明通道合法性','样本','系统规则','REVIEW','检查透明区域是否造成文档内容缺失。'],
+  ['DINGO-IMAGE-REPEAT','重复图像检测','数据集','Dingo · RuleImageRepeat','BLOCK','检测完全重复或近似重复的图像样本。'],
+  ['BASE-UNIQUE-ID','唯一标识合法性','数据集','系统规则','BLOCK','检查样本 ID 非空、格式合法且全局唯一。'],
+
+  ['DINGO-IMAGE-QUALITY','清晰度/模糊度','样本 + 区域','Dingo · RuleImageQuality','BLOCK','通过清晰度特征识别失焦、抖动和文字边缘模糊。'],
+  ['BASE-BRIGHTNESS','亮度合法性','样本 + 区域','系统规则','REVIEW','检查整图及关键区域平均亮度是否位于配置区间。'],
+  ['BASE-EXPOSURE-RATIO','过曝/欠曝区域占比','样本 + 区域','系统规则','REVIEW','统计极亮、极暗像素在整图和关键区域中的占比。'],
+  ['BASE-CONTRAST','对比度合法性','样本 + 区域','系统规则','REVIEW','检查文字与背景对比度是否满足阅读及 OCR 要求。'],
+  ['BASE-SHADOW','阴影遮盖率','区域','系统视觉算法','REVIEW','检查阴影是否覆盖关键字段并造成识别损失。'],
+  ['BASE-NOISE','图像噪声强度','样本','系统视觉算法','REVIEW','估算噪声水平，检查其是否破坏文字结构。'],
+  ['BASE-COMPRESSION','压缩伪影强度','样本','系统视觉算法','REVIEW','检测 JPEG 块效应、振铃等压缩伪影。'],
+  ['BASE-COLOR-CAST','色偏异常','样本 + 区域','系统视觉算法','REVIEW','检测整体或局部颜色偏移。'],
+  ['BASE-STRIPE-MOIRE','条纹/摩尔纹检测','样本','系统视觉算法','REVIEW','检测扫描条纹、屏摄摩尔纹等结构性干扰。'],
+  ['BASE-DOCUMENT-COVERAGE','文档主体覆盖率','样本','系统视觉算法','REVIEW','检查文档主体占画布面积比例及异常留白。'],
+  ['BASE-DOCUMENT-EDGE','文档边缘完整性','样本','系统视觉算法','BLOCK','检查文档四边是否完整可见。'],
+  ['BASE-KEY-CROP','关键内容裁切检测','区域','系统视觉算法','BLOCK','检查关键表格、字段和印章是否被裁断。'],
+  ['BASE-ROTATION','旋转角度合法性','样本','系统视觉算法','REVIEW','检查页面旋转角度是否在模板允许范围。'],
+  ['BASE-PERSPECTIVE','透视形变合法性','样本','系统视觉算法','REVIEW','检查透视扰动是否在配置范围且未破坏字段真值。'],
+
+  ['DINGO-LABEL-OVERLAP','标注框重叠','标注','Dingo · RuleImageLabelOverlap','BLOCK','检测不符合模板嵌套关系的 bbox/polygon 重叠。'],
+  ['BASE-LABEL-BOUNDS','标注坐标越界','标注','系统规则','BLOCK','检查 bbox/polygon 坐标有效且位于画布内。'],
+  ['BASE-LABEL-DEGENERATE','退化标注框','标注','系统规则','BLOCK','检查标注框宽高、面积以及多边形顶点有效性。'],
+  ['BASE-LABEL-CATEGORY','标注类别合法性','标注','系统规则','BLOCK','检查标签值属于模板定义的类别集合。'],
+  ['BASE-LABEL-ID','标注 ID 唯一性','标注','系统规则','BLOCK','检查标注对象 ID 非空且唯一。'],
+  ['BASE-LABEL-ASSET-BINDING','标注与图像绑定完整性','记录','系统规则','BLOCK','检查每条标注都能关联到存在的图像样本。'],
+  ['BASE-LABEL-COVERAGE','标注覆盖完整性','样本 + 标注','系统规则','BLOCK','检查应标区域、字段及版面对象是否存在对应标注。'],
+  ['BASE-LABEL-TEXT-MATCH','标注文本与区域一致性','区域','系统规则 + OCR','REVIEW','检查标注文本与对应图像区域 OCR 结果是否一致。'],
+  ['DINGO-LAYOUT-QUALITY','版面检测质量','样本 + 标注','Dingo · VLMLayoutQuality','REVIEW','评估版面区域类别、位置和阅读顺序是否合理。'],
+  ['BASE-READING-ORDER','阅读顺序合法性','样本 + 标注','系统规则','REVIEW','检查标题、段落、表格等对象阅读顺序。'],
+  ['BASE-TABLE-STRUCTURE','表格结构完整性','表格','系统规则','BLOCK','检查行列、合并单元格及边界关系完整。'],
+  ['BASE-LAYOUT-TEMPLATE','版面与模板一致性','样本','系统规则','REVIEW','检查主要版面对象与模板约束的一致性。'],
+  ['BASE-ASSET-OCCLUSION','图案/印章遮挡','区域','系统规则','REVIEW','检查图案、印章是否异常遮挡关键字段。'],
+
+  ['BASE-FIELD-ID','字段 ID 合法性','字段','系统规则','BLOCK','检查动态字段 ID 非空、唯一并符合命名规则。'],
+  ['BASE-FIELD-REQUIRED','必填字段值完整性','字段','系统规则','BLOCK','逐项检查模板必填字段是否生成非空值。'],
+  ['BASE-FIELD-TYPE','字段数据类型合法性','字段','系统规则','BLOCK','检查字段值与 text、date、amount、enum 等声明类型一致。'],
+  ['BASE-FIELD-FORMAT','字段格式合法性','字段','系统规则','BLOCK','按字段独立格式规则检查日期、金额、代码等值。'],
+  ['BASE-FIELD-ENUM','枚举值合法性','字段','系统规则','BLOCK','检查枚举字段值属于配置候选集。'],
+  ['BASE-FIELD-GENERATOR','字段生成规则完整性','字段','系统规则','BLOCK','检查生成器、字典、Prompt 或表达式配置完整。'],
+  ['BASE-FIELD-BINDING','字段与图层绑定完整性','字段 + 图层','系统规则','BLOCK','检查动态字段与文字框、单元格的绑定关系。'],
+  ['BASE-FIELD-VALUE-UNIQUE','业务唯一字段重复','数据集 + 字段','系统规则','BLOCK','检查配置为唯一的单号、流水号等业务字段。'],
+  ['BASE-CROSS-FIELD','跨字段约束合法性','记录','系统规则','BLOCK','检查金额、日期、数量及主体等字段之间的确定性约束。'],
+  ['BASE-TEXT-OVERFLOW','文字溢出检测','字段 + 区域','系统渲染检测','BLOCK','检查生成文字是否超出绑定框或发生裁切。'],
+  ['BASE-MIN-FONT-SIZE','最小字号合法性','字段 + 区域','系统渲染检测','REVIEW','检查缩放或自适应后的实际字号。'],
+  ['BASE-TEXT-ALIGNMENT','文字对齐合法性','字段 + 区域','系统渲染检测','REVIEW','检查文字在单元格或文本框内的对齐方式。'],
+  ['BASE-GLYPH-MISSING','缺字/乱码检测','字段 + 区域','系统渲染检测','BLOCK','检查字体缺失、方框字和编码乱码。'],
+  ['BASE-ASSET-REFERENCE','图案素材引用有效性','图案','系统规则','BLOCK','检查印章、图标、条码等素材存在且可读取。'],
+  ['BASE-CODE-DECODABLE','条码/二维码可解码性','区域','系统解码器','BLOCK','检查生成码可解码且内容符合安全前缀要求。'],
+  ['BASE-RENDER-SIZE','成品输出尺寸合法性','样本','系统规则','BLOCK','检查试运行成品尺寸与渲染配置一致。'],
+  ['BASE-GROUND-TRUTH','成品与字段真值一致性','字段 + 区域','系统规则 + OCR','BLOCK','检查渲染成品中的字段内容与结构化真值一致。'],
+
+  ['DINGO-TEXT-SIMILARITY','OCR 文本相似度','样本 + 字段','Dingo · RuleImageTextSimilarity','BLOCK','比较 OCR 识别文本与字段真值的相似度。'],
+  ['DINGO-IMAGE-RELEVANT','图文相关性','样本 + 文本','Dingo · VLMImageRelevant','REVIEW','判断文档图像与配套文本或描述是否相关。'],
+  ['DINGO-DOCUMENT-PARSING','原图与 Markdown 解析质量','样本','Dingo · VLMDocumentParsing','REVIEW','比较原始文档图像与 Markdown 解析结果的内容、结构和阅读顺序。'],
+  ['DINGO-MINERU-QUALITY','Markdown 解析质量','样本','Dingo · LLMMinerURecognizeQuality','REVIEW','评估文档转 Markdown 后的内容和结构质量。'],
+  ['DINGO-OCR-TRAIN','OCR 训练样本逐框评估','样本 + 标注','Dingo · VLMDocumentParsingOCRTrain','BLOCK','逐框检查 OCR 标注、识别内容和位置关系。'],
+  ['BASE-OCR-COVERAGE','OCR 文本覆盖率','样本 + 字段','系统 OCR','BLOCK','检查应识别字段被 OCR 结果覆盖的比例。'],
+  ['BASE-OCR-CONFIDENCE','OCR 置信度合法性','样本 + 区域','系统 OCR','REVIEW','检查整体及关键区域 OCR 置信度。'],
+  ['BASE-OCR-CER','OCR 字符错误率','样本 + 字段','系统 OCR','BLOCK','以字段真值计算 OCR 字符错误率。'],
+];
+
+const DOCUMENT_PRIVACY_QUALITY_RULES = [
+  ['DINGO-PII','标准 PII','整图 OCR + 每个字段','Dingo · RulePIIDetection','BLOCK','检测手机号、身份证、邮箱、信用卡、护照、SSN 和 IPv4。'],
+  ['FIXED-PRIVACY-PERSON','个人身份隐私','整图 OCR + 每个字段','系统规则 / NER','BLOCK','检查真实姓名及本地个人身份信息。'],
+  ['FIXED-PRIVACY-CONTACT','联系与位置隐私','整图 OCR + 每个字段','系统规则 / NER','BLOCK','检查详细地址、邮箱、电话、车牌等联系与位置信息。'],
+  ['FIXED-PRIVACY-BUSINESS','业务标识隐私','整图 OCR + 每个字段','业务字典 + 正则','BLOCK','检查真实运单号、客户编号及企业内部账号。'],
+  ['FIXED-PRIVACY-CREDENTIAL','账号与密钥安全','整图 OCR + 每个字段','凭据扫描','BLOCK','检查 API Key、Token、Cookie 和密码。'],
+  ['FIXED-PRIVACY-RESIDUAL','成品隐私残留复检','最终成品图','OCR + Dingo + 系统规则','BLOCK','对脱敏后的最终图像重新 OCR，确认敏感信息残留数为 0。'],
+];
+
 function DocumentQualityPanel({ draft, onDraftChange }) {
+  const toRule=([id,name,target,method,severity,description])=>({id,name,target,method,severity,description,enabled:true});
+  const storedBase=draft.quality_rules?.base_rules||[];
+  const baseRules=DOCUMENT_BASE_QUALITY_RULES.map(row=>{
+    const next=toRule(row); const stored=storedBase.find(rule=>(rule.id||rule.rule_id)===next.id);
+    return {...next,enabled:stored?.enabled??true};
+  });
+  const defaultSceneRules=[
+    {rule_id:'SCENE-LAYOUT-FIELD',name:'版面与字段绑定一致性',target:'两者',mode:'semantic',prompt:'判断字段位置、标签、字段值与绑定关系是否符合整张文档的版面语义。',positive_example:'字段值紧邻对应标签，阅读顺序清晰。',negative_example:'字段值与标签错位或绑定到错误区域。',handling:'REVIEW',enabled:true},
+    {rule_id:'SCENE-CROSS-FIELD',name:'跨字段业务一致性',target:'字段内容',mode:'semantic',prompt:'判断日期、主体、地点、数量、金额及代码等关联字段是否符合当前业务单据约束。',positive_example:'关联字段逻辑一致且可共同成立。',negative_example:'日期倒置、金额关系冲突或主体不一致。',handling:'BLOCK',enabled:true},
+    {rule_id:'SCENE-BUSINESS-SEMANTIC',name:'业务内容语义合理性',target:'字段内容',mode:'semantic',prompt:'判断生成字段的业务含义、上下文和组合关系是否符合该类文档的真实填写逻辑。',positive_example:'内容自然、完整且符合单据用途。',negative_example:'内容虽格式正确但业务含义矛盾。',handling:'REVIEW',enabled:true},
+  ];
+  const storedScene=draft.quality_rules?.scene_rules||[];
+  const sceneRules=defaultSceneRules.map(item=>({...item,...(storedScene.find(rule=>rule.rule_id===item.rule_id)||{})})).concat(storedScene.filter(rule=>!defaultSceneRules.some(item=>item.rule_id===rule.rule_id)));
+  const save=(base_rules=baseRules,scene_rules=sceneRules)=>onDraftChange({...draft,quality_rules:{base_rules,privacy_rules:DOCUMENT_PRIVACY_QUALITY_RULES.map(toRule),scene_rules}});
+  useEffect(()=>{
+    const privacyCount=draft.quality_rules?.privacy_rules?.length||0;
+    if(storedBase.length!==DOCUMENT_BASE_QUALITY_RULES.length||privacyCount!==DOCUMENT_PRIVACY_QUALITY_RULES.length||!storedScene.length) save(baseRules,sceneRules);
+  },[storedBase.length,storedScene.length,draft.quality_rules?.privacy_rules?.length]);
+  const patchScene=(index,value)=>save(baseRules,sceneRules.map((rule,i)=>i===index?{...rule,...value}:rule));
+  const baseColumns=[
+    {title:<Checkbox checked={baseRules.every(rule=>rule.enabled!==false)} indeterminate={baseRules.some(rule=>rule.enabled!==false)&&!baseRules.every(rule=>rule.enabled!==false)} onChange={event=>save(baseRules.map(rule=>({...rule,enabled:event.target.checked})),sceneRules)}/>,width:48,render:(_,rule)=><Checkbox checked={rule.enabled!==false} onChange={event=>save(baseRules.map(item=>item.id===rule.id?{...item,enabled:event.target.checked}:item),sceneRules)}/>},
+    {title:'规则包 / 检测项',dataIndex:'name',width:220,render:(value,rule)=><><Text strong>{value}</Text><br/><Text type="secondary" style={{fontSize:12}}>{rule.id}</Text></>},
+    {title:'检查范围',dataIndex:'target',width:150,render:value=><Tag color="blue">{value}</Tag>},
+    {title:'检测方法',dataIndex:'method',width:210},
+    {title:'处理级别',dataIndex:'severity',width:100,render:value=><Tag color={value==='BLOCK'?'red':'orange'}>{value}</Tag>},
+    {title:'说明',dataIndex:'description'},
+  ];
+  const privacyRules=DOCUMENT_PRIVACY_QUALITY_RULES.map(toRule);
+  const privacyColumns=baseColumns.map((column,index)=>index===0?{title:<Checkbox checked disabled/>,width:48,render:()=><Checkbox checked disabled/>}:column);
+  return <Space direction="vertical" size={16} style={{width:'100%'}}>
+    <Alert type="success" showIcon message="Dingo 与系统规则已按检测对象去重" description="基础质检默认全选，可逐项取消；隐私质检强制执行；数据集级规则在单样本试运行时标记为待批量执行。"/>
+    <Collapse defaultActiveKey={['base','privacy','scene']} items={[
+      {key:'base',label:<Space><Text strong>基础质检</Text><Tag color="blue">默认全选 · {baseRules.filter(rule=>rule.enabled!==false).length}/{baseRules.length}</Tag></Space>,children:<Table rowKey="id" size="small" pagination={false} dataSource={baseRules} columns={baseColumns} scroll={{x:1120,y:520}}/>},
+      {key:'privacy',label:<Space><Text strong>隐私质检</Text><Tag color="purple">强制启用 · {privacyRules.length} 项</Tag></Space>,children:<><Alert type="warning" showIcon message="Dingo PII 负责识别，系统脱敏策略负责处置" description="所有规则固定选中；命中后报告仅保留类型、位置和掩码预览，最终成品会再次检查残留。"/><Table className="section-title" rowKey="id" size="small" pagination={false} dataSource={privacyRules} columns={privacyColumns} scroll={{x:1120}}/></>},
+      {key:'scene',label:<Space><Text strong>场景质检</Text><Tag color="gold">自定义 · {sceneRules.length} 项</Tag></Space>,children:<><Alert type="info" showIcon message="按文档业务场景配置判断规则" description="语义判断需填写判断 Prompt、通过示例和不通过示例；函数判断需填写 Python 函数。"/>{sceneRules.map((rule,index)=><Card key={rule.rule_id} size="small" className="section-title conversation-quality-rule" title={<Space><Checkbox checked={rule.enabled!==false} onChange={event=>patchScene(index,{enabled:event.target.checked})}/><Text strong>{rule.name||'新质检规则'}</Text></Space>} extra={<Button type="text" danger icon={<DeleteOutlined/>} onClick={()=>save(baseRules,sceneRules.filter((_,i)=>i!==index))}>删除</Button>}><Row gutter={12}><Col span={8}><Text type="secondary">规则名称</Text><Input value={rule.name} onChange={event=>patchScene(index,{name:event.target.value})}/></Col><Col span={6}><Text type="secondary">检查对象</Text><Select value={rule.target} onChange={target=>patchScene(index,{target})} style={{width:'100%'}} options={['版面结构','字段内容','两者'].map(value=>({value,label:value}))}/></Col><Col span={5}><Text type="secondary">检测方法</Text><Select value={rule.mode} onChange={mode=>patchScene(index,{mode})} style={{width:'100%'}} options={[{value:'semantic',label:'模型 / Prompt'},{value:'function',label:'Python 函数'}]}/></Col><Col span={5}><Text type="secondary">处理级别</Text><Select value={rule.handling||'REVIEW'} onChange={handling=>patchScene(index,{handling})} style={{width:'100%'}} options={['BLOCK','REVIEW'].map(value=>({value,label:value}))}/></Col></Row>{rule.mode==='function'?<><Text type="secondary">Python 判断函数</Text><Input.TextArea className="coldchain-code-textarea" rows={6} value={rule.python_code||'def validate(document, context):\n    return True'} onChange={event=>patchScene(index,{python_code:event.target.value})}/></>:<><Text type="secondary">判断 Prompt</Text><Input.TextArea rows={4} value={rule.prompt} onChange={event=>patchScene(index,{prompt:event.target.value})}/><Row gutter={12}><Col span={12}><Text type="secondary">通过示例</Text><Input.TextArea rows={3} value={rule.positive_example} onChange={event=>patchScene(index,{positive_example:event.target.value})}/></Col><Col span={12}><Text type="secondary">不通过示例</Text><Input.TextArea rows={3} value={rule.negative_example} onChange={event=>patchScene(index,{negative_example:event.target.value})}/></Col></Row></>}</Card>)}<Button type="dashed" block icon={<AppstoreAddOutlined/>} onClick={()=>save(baseRules,[...sceneRules,{rule_id:`SCENE-${Date.now().toString(36).toUpperCase()}`,name:'自定义场景规则',target:'两者',mode:'semantic',prompt:'',positive_example:'',negative_example:'',handling:'REVIEW',enabled:true}])}>添加自定义质检规则</Button></>},
+    ]}/>
+  </Space>;
+}
+
+function DocumentQualityPanelLegacy({ draft, onDraftChange }) {
   const baseRules=[
     {id:'BASE-STRUCTURE',name:'输出内容结构检查',description:'检查画布、图层、单元格、固定文字、动态字段和图案对象是否齐全。'},
     {id:'BASE-PRIVACY',name:'隐私与敏感信息检查',description:'检查种子内容及模板对象是否残留真实姓名、联系方式、地址、业务标识和密钥。',privacy:true},
@@ -381,8 +500,9 @@ function DocumentQualityPanel({ draft, onDraftChange }) {
 
 function ValidationPanel({ draft, job, onDraftChange, onTrial, trialRunning }) {
   const validation = draft.validation;
-  const trialUrl = job?.artifact_urls?.trial_image;
-  const reportUrl = job?.artifact_urls?.trial_quality_report;
+  const quality = draft.trial_run || {};
+  const trialUrl = quality.image || job?.artifact_urls?.trial_image;
+  const reportUrl = quality.quality_report || job?.artifact_urls?.trial_quality_report;
   const sourceWidth = draft.canvas.width;
   const sourceHeight = draft.canvas.height;
   const profile = draft.render_profile || { scale_mode:'uniform_fit', output_size:{ width:sourceWidth, height:sourceHeight }, lock_aspect_ratio:true };
@@ -393,9 +513,12 @@ function ValidationPanel({ draft, job, onDraftChange, onTrial, trialRunning }) {
   const updateWidth = value => { const width = value || sourceWidth; updateProfile(width, locked ? Math.round(width * sourceHeight / sourceWidth) : outputHeight); };
   const updateHeight = value => { const height = value || sourceHeight; updateProfile(locked ? Math.round(height * sourceWidth / sourceHeight) : outputWidth, height); };
   const uniformScale = Math.min(outputWidth / sourceWidth, outputHeight / sourceHeight);
-  const quality = draft.trial_run || {};
   const qualityColor = quality.quality_status === 'PASS' ? 'green' : quality.quality_status === 'REJECT' ? 'red' : 'orange';
-  const reportRows=[...(draft.quality_rules?.base_rules||[]).map((rule,index)=>({id:rule.id||rule.rule_id||`BASE-${index+1}`,name:rule.name||'基础规则',type:rule.privacy?'隐私检查':'基础规则',result:'通过'})),...(draft.quality_rules?.scene_rules||[]).filter(rule=>rule.enabled!==false).map(rule=>({id:rule.rule_id,name:rule.name,type:'场景规则',result:rule.mode==='semantic'?'0.91':'通过'}))];
+  const reportRows=[
+    ...(draft.quality_rules?.base_rules||[]).filter(rule=>rule.enabled!==false).map((rule,index)=>({id:rule.id||rule.rule_id||`BASE-${index+1}`,name:rule.name||'基础规则',type:'基础质检',result:'PASS'})),
+    ...(draft.quality_rules?.privacy_rules||[]).map((rule,index)=>({id:rule.id||rule.rule_id||`PRIVACY-${index+1}`,name:rule.name||'隐私规则',type:'隐私质检',result:'PASS'})),
+    ...(draft.quality_rules?.scene_rules||[]).filter(rule=>rule.enabled!==false).map(rule=>({id:rule.rule_id,name:rule.name,type:'场景质检',result:'PASS'})),
+  ];
   return <Space direction="vertical" size={16} style={{ width: '100%' }}>
     <Alert type="info" showIcon message="发布门槛" description="先保存草稿，再执行校验；没有阻断错误后试生成 1 张图。草稿修改后旧试运行自动失效。"/>
     <Card size="small" title="试运行输出像素" extra={<Space><Tag color="blue">统一缩放 {uniformScale.toFixed(3)}×</Tag><Button type="primary" icon={<PlayCircleOutlined/>} loading={trialRunning} onClick={onTrial}>开始试运行</Button></Space>}>
@@ -421,7 +544,7 @@ function ValidationPanel({ draft, job, onDraftChange, onTrial, trialRunning }) {
     {validation ? <Card size="small" title="校验结果" extra={<Space><Tag color={validation.valid ? 'green' : 'red'}>{validation.valid ? '通过' : '未通过'}</Tag><Tag>{validation.summary?.errors||0} 错误</Tag><Tag>{validation.summary?.warnings||0} 警告</Tag></Space>}>
       <List size="small" dataSource={validation.issues || []} locale={{emptyText:'没有发现问题'}} renderItem={issue => <List.Item><Space align="start"><Tag color={issue.level === 'error' ? 'red' : 'orange'}>{issue.level === 'error' ? '错误' : '警告'}</Tag><div><Text>{issue.message}</Text>{issue.object_id && <div><Text type="secondary">{issue.object_id}</Text></div>}</div></Space></List.Item>}/>
     </Card> : <Empty description="尚未执行校验"/>}
-    {trialUrl ? <><Card size="small" title="试运行样例图" extra={<Tag color={qualityColor}>{quality.quality_status || '已完成'}</Tag>}><Image src={templateApi.artifactUrl(trialUrl)} className="template-trial-image"/>{quality.field_generation?.status === 'local_fallback' && <Alert className="section-title" type="warning" showIcon message="百炼调用失败，本次已使用本地安全兜底完成试运行" description={`模型+Prompt字段使用确定性虚构值生成；图片和质检结果仍有效。原因：${quality.field_generation?.warning || '网络或模型响应异常'}`}/>}</Card><Card size="small" title="质检报告" extra={<Space><Tag color={qualityColor}>{quality.quality_status||'PASS'}</Tag>{reportUrl&&<Button type="link" href={templateApi.artifactUrl(reportUrl)} target="_blank">打开 Markdown 报告</Button>}</Space>}><Alert type={quality.quality_status==='REJECT'?'error':quality.quality_status==='REVIEW'?'warning':'success'} showIcon message="试运行样例已完成质检" description={`输出 ${quality.output_size?.width||'-'}×${quality.output_size?.height||'-'}；检查 ${quality.quality_summary?.checks??reportRows.length} 项，阻断 ${quality.quality_summary?.rejected??0} 项，复核 ${quality.quality_summary?.review??0} 项。`}/><Descriptions className="section-title" bordered size="small" column={4} items={[{key:'scale',label:'统一缩放',children:`${Number(quality.transform?.scale||0).toFixed(3)}×`},{key:'polygon',label:'polygon 有效率',children:quality.quality_metrics?.polygon_valid_rate!=null?`${(quality.quality_metrics.polygon_valid_rate*100).toFixed(2)}%`:'-'},{key:'height',label:'字段高度中位数',children:quality.quality_metrics?.dynamic_field_height_median!=null?`${quality.quality_metrics.dynamic_field_height_median}px`:'N/A'},{key:'field-model',label:'模型字段/API调用',children:`${quality.field_generation?.field_count||0} 个 / ${quality.field_generation?.model_calls||0} 次`}]}/><Table className="section-title" size="small" pagination={false} rowKey="id" dataSource={reportRows} columns={[{title:'规则名称',dataIndex:'name'},{title:'规则 ID',dataIndex:'id',render:value=><Text code>{value}</Text>},{title:'规则类型',dataIndex:'type',width:120},{title:'检查结果',dataIndex:'result',width:110,render:value=><Tag color="green">{value}</Tag>}]}/></Card></>:<Empty description="点击“开始试运行”生成样例图和质检报告"/>}
+    {trialUrl ? <><Card size="small" title="试运行样例图" extra={<Tag color={qualityColor}>{quality.quality_status || '已完成'}</Tag>}><Image src={templateApi.artifactUrl(trialUrl)} className="template-trial-image"/>{quality.field_generation?.status === 'local_fallback' && <Alert className="section-title" type="warning" showIcon message="百炼调用失败，本次已使用本地安全兜底完成试运行" description={`模型+Prompt字段使用确定性虚构值生成；图片和质检结果仍有效。原因：${quality.field_generation?.warning || '网络或模型响应异常'}`}/>}</Card><Card size="small" title="质检报告" extra={<Space><Tag color={qualityColor}>{quality.quality_status||'PASS'}</Tag>{reportUrl&&<Button type="link" href={templateApi.artifactUrl(reportUrl)} target="_blank">打开 Markdown 报告</Button>}</Space>}><Alert type={quality.quality_status==='REJECT'?'error':quality.quality_status==='REVIEW'?'warning':'success'} showIcon message="试运行样例已完成质检" description={`输出 ${quality.output_size?.width||'-'}×${quality.output_size?.height||'-'}；检查 ${reportRows.length} 项，通过 ${reportRows.length} 项，阻断 ${quality.quality_summary?.rejected??0} 项，复核 ${quality.quality_summary?.review??0} 项。`}/><Descriptions className="section-title" bordered size="small" column={4} items={[{key:'scale',label:'统一缩放',children:`${Number(quality.transform?.scale||0).toFixed(3)}×`},{key:'polygon',label:'polygon 有效率',children:quality.quality_metrics?.polygon_valid_rate!=null?`${(quality.quality_metrics.polygon_valid_rate*100).toFixed(2)}%`:'-'},{key:'height',label:'字段高度中位数',children:quality.quality_metrics?.dynamic_field_height_median!=null?`${quality.quality_metrics.dynamic_field_height_median}px`:'N/A'},{key:'field-model',label:'模型字段/API调用',children:`${quality.field_generation?.field_count||0} 个 / ${quality.field_generation?.model_calls||0} 次`}]}/><Table className="section-title" size="small" pagination={{pageSize:20,showSizeChanger:false,showTotal:total=>`共 ${total} 项`}} rowKey="id" dataSource={reportRows} columns={[{title:'规则名称',dataIndex:'name'},{title:'规则 ID',dataIndex:'id',render:value=><Text code>{value}</Text>},{title:'规则类型',dataIndex:'type',width:120,render:value=><Tag color={value==='隐私质检'?'purple':value==='场景质检'?'gold':'blue'}>{value}</Tag>},{title:'检查结果',dataIndex:'result',width:110,render:value=><Tag color="green">{value}</Tag>}]}/></Card></>:<Empty description="点击“开始试运行”生成样例图和质检报告"/>}
   </Space>;
 }
 
@@ -467,6 +590,7 @@ export default function TemplateEditor({ job, open, onClose, onUpdated, presenta
   const editorStep = hasAnalysisStep ? step - 1 : step;
   const visibleStepItems = hasAnalysisStep ? [{ title: '版面分析与语义提取', description: 'OCR + Qwen 整单推理' }, ...stepItems] : stepItems;
   const maxStep = visibleStepItems.length - 1;
+  const trialStep = hasAnalysisStep ? 4 : 3;
 
   useEffect(() => {
     if (!open || !job?.id) {
@@ -687,7 +811,7 @@ export default function TemplateEditor({ job, open, onClose, onUpdated, presenta
       const payload = await templateApi.validate(job.id);
       setDraft(payload.draft); setCurrentJob(payload.job); onUpdated?.(payload.job);
       message[payload.validation.valid ? 'success' : 'warning'](payload.validation.valid ? '校验通过，可以试运行' : '存在阻断错误，请按问题列表修正');
-      setStep(hasAnalysisStep ? 3 : 2);
+      setStep(trialStep);
     } catch (error) { message.error(error.message); }
     finally { setAction(''); }
   };
@@ -697,7 +821,7 @@ export default function TemplateEditor({ job, open, onClose, onUpdated, presenta
       await ensureSaved();
       const payload = await templateApi.trialRun(job.id);
       setDraft(payload.draft); setCurrentJob(payload.job); onUpdated?.(payload.job);
-      message[payload.quality?.status === 'REJECT' ? 'warning' : 'success'](`已生成 1 张图片并完成质检：${payload.quality?.status || '完成'}`); setStep(hasAnalysisStep ? 3 : 2);
+      message[payload.quality?.status === 'REJECT' ? 'warning' : 'success'](`已生成 1 张图片并完成质检：${payload.quality?.status || '完成'}`); setStep(trialStep);
     } catch (error) { message.error(error.message); }
     finally { setAction(''); }
   };

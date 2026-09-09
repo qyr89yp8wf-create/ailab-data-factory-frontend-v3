@@ -1,4 +1,6 @@
 import { csvDataUrl, id, jsonDataUrl, loadSeed, mockResult, now, readStore, textDataUrl, updateStore } from './mockStore';
+import { COLDCHAIN_MODEL_CONFIGURATION } from './timeSeriesModelSeed';
+import { compileStage1, compileStage2, DEMO_FROZEN_EVENT, PREVIEW_RUNTIME, validateEventResult } from './timeSeriesPromptCompiler';
 
 const TEMPLATE_STORE = 'coldchain-templates';
 const DRAFT_STORE = 'coldchain-drafts';
@@ -24,7 +26,8 @@ async function officialTemplate() {
 }
 
 async function allTemplates() {
-  return [await officialTemplate(), ...readStore(TEMPLATE_STORE, [])];
+  const demo = { template_id:'COLDTPL-REEFER-MODEL-DEMO-V2', name:`${COLDCHAIN_MODEL_CONFIGURATION.name}（演示用）`, description:COLDCHAIN_MODEL_CONFIGURATION.description, business_type:COLDCHAIN_MODEL_CONFIGURATION.business_type, status:'enabled', scope:'custom', version:'V1', version_count:1, generation_rule_count:(COLDCHAIN_MODEL_CONFIGURATION.fields||[]).reduce((sum,field)=>sum+(field.generation_rules?.length||1),0), quality_rule_count:(COLDCHAIN_MODEL_CONFIGURATION.fields||[]).reduce((sum,field)=>sum+(field.quality_rules?.length||1),0), parameter_count:COLDCHAIN_MODEL_CONFIGURATION.fields?.length||0, coverage_profile_count:0, configuration:COLDCHAIN_MODEL_CONFIGURATION, selected_version:{version:'V1',configuration:COLDCHAIN_MODEL_CONFIGURATION}, created_at:'2026-09-09 09:00:00', updated_at:'2026-09-09 09:00:00' };
+  return [demo, await officialTemplate(), ...readStore(TEMPLATE_STORE, []).filter(item=>item.template_id!==demo.template_id)];
 }
 
 const chartSvg = title => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420"><rect width="100%" height="100%" fill="#f7faff"/><text x="44" y="54" font-family="Arial" font-size="24" fill="#1f1f1f">${title}</text><path d="M55 300 C160 290 190 180 300 220 S470 125 590 210 S760 145 840 175" fill="none" stroke="#1677ff" stroke-width="5"/><path d="M55 320 C180 300 250 270 350 285 S520 260 650 270 S770 245 840 250" fill="none" stroke="#52c41a" stroke-width="4"/><line x1="55" y1="340" x2="850" y2="340" stroke="#bfbfbf"/><text x="55" y="380" font-family="Arial" font-size="16" fill="#8c8c8c">前端 Mock 结果预览</text></svg>`)}`;
@@ -35,17 +38,18 @@ function trialFor(draft, payload = {}) {
   const intervalMinutes = Math.max(1, Number(payload.interval_minutes || 10));
   const fields = (draft.configuration?.fields || []).filter(field => field.enabled !== false);
   const numericFields = fields.filter(field => ['number', 'integer'].includes(field.type));
-  const baseValues = { temperature_setpoint: -18, supply_air_temperature: -19.2, return_air_temperature: -17.4, cargo_temperature: -17.8, ambient_temperature: 24, relative_humidity: 68 };
-  const startAt = new Date('2026-09-01T08:00:00+08:00');
+  const baseValues = { temperature_setpoint: 4, ambient_temperature:25, supply_air_temperature:2, return_air_temperature:4, cargo_temperature:4.5, relative_humidity:65, latitude:30, longitude:120, return_air_temperature_observed:4.02 };
+  const startAt = new Date('2026-09-08T08:00:00+08:00');
   const series = Array.from({ length: stepCount }, (_, index) => {
     const timestamp = new Date(startAt.getTime() + index * intervalMinutes * 60000).toISOString().replace('T', ' ').slice(0, 19);
     const ratio = index / Math.max(1, stepCount - 1);
-    const row = { timestamp };
+    const eventActive=index>=Math.floor(stepCount/3)&&index<Math.floor(stepCount/3)+Math.max(1,Math.round(30/intervalMinutes));
+    const row = { index, timestamp, power_status:1, transport_stage:index<stepCount/4?'road':index<stepCount/2?'port':'sea', active_event_type:eventActive?'door_open':'normal', network_status:'online' };
     numericFields.forEach((field, fieldIndex) => {
       const base = baseValues[field.field_id] ?? (fieldIndex + 1) * 8;
-      const wave = Math.sin(index / (5 + fieldIndex)) * (field.field_id === 'relative_humidity' ? 3.2 : 0.65 + fieldIndex * 0.08);
-      const eventPulse = ratio > 0.54 && ratio < 0.7 ? Math.sin((ratio - 0.54) / 0.16 * Math.PI) * (field.field_id === 'relative_humidity' ? 5 : 2.4) : 0;
-      row[field.field_id] = Number((base + wave + eventPulse).toFixed(2));
+      const wave = field.field_id==='temperature_setpoint'?0:Math.sin(index / (5 + fieldIndex)) * (field.field_id === 'relative_humidity' ? 1.5 : 0.08);
+      const eventPulse = ratio > 0.32 && ratio < 0.55 && ['supply_air_temperature','return_air_temperature','cargo_temperature','return_air_temperature_observed'].includes(field.field_id) ? Math.sin((ratio - 0.32) / 0.23 * Math.PI) * (field.field_id==='cargo_temperature'?0.4:2) : 0;
+      row[field.field_id] = Number((base + wave + eventPulse).toFixed(['latitude','longitude'].includes(field.field_id)?6:2));
     });
     return row;
   });
@@ -53,15 +57,15 @@ function trialFor(draft, payload = {}) {
     const ratio = index / Math.max(1, stepCount - 1);
     return { timestamp: series[index].timestamp, longitude: Number((121.47 - ratio * 116.98 + Math.sin(index / 8) * 0.35).toFixed(5)), latitude: Number((31.23 + ratio * 20.69 + Math.sin(index / 11) * 0.22).toFixed(5)) };
   });
-  const modelInput = {
-    task: '生成冷链运输时序事件与字段语义约束',
-    sample_count: count,
-    step_count: stepCount,
-    interval_minutes: intervalMinutes,
-    event_generation: draft.configuration?.event_generation || {},
-    output_fields: fields.map(field => ({ field_id: field.field_id, label: field.label, type: field.type, generation_rule: field.generation_rules?.[0] || null })),
-    generation_parameters: payload.generation_parameters,
-  };
+  const runtime={...PREVIEW_RUNTIME,point_count:stepCount,step_minutes:intervalMinutes,duration_minutes:stepCount*intervalMinutes};
+  const assignment={selected_values:[{dimension_id:'event_type',dimension_name:'事件类型',option_id:'door_open',option_name:'开门'},{dimension_id:'primary_event_stage',dimension_name:'主要事件发生阶段',option_id:'port',option_name:'港口等待'},{dimension_id:'cargo_type',dimension_name:'货物类型',option_id:'chilled_goods',option_name:'冷藏货物'},{dimension_id:'environment',dimension_name:'环境条件',option_id:'mild_warm',option_name:'常规温暖环境'}],not_applicable_dimensions:[]};
+  let compiledStage1=null;let compiledStage2=null;let generatedEvent=DEMO_FROZEN_EVENT;
+  try{compiledStage1=compileStage1(draft.configuration,assignment,runtime);const checkedEvent=validateEventResult({status:'ok',event:DEMO_FROZEN_EVENT},draft.configuration,assignment,runtime);generatedEvent=checkedEvent.event;compiledStage2=compileStage2(draft.configuration,runtime,{assignment,event:generatedEvent});}catch{/* 旧草稿继续使用本地试运行兜底 */}
+  const requestMeta={request_preview:true,model:payload.model_alias||null,generation_parameters:payload.generation_parameters??null};
+  const stage1Request=compiledStage1?{...requestMeta,messages:compiledStage1.messages}:null;
+  const stage2Request=compiledStage2?{...requestMeta,messages:compiledStage2.messages}:null;
+  const generatedEventResult={status:'ok',event:generatedEvent};
+  const modelInput = {stage1_request:stage1Request,stage1_frozen_event:generatedEvent,stage2_request:stage2Request,generation_parameters:payload.generation_parameters};
   if (modelInput.generation_parameters === undefined) delete modelInput.generation_parameters;
   const fieldQualityItems = fields.map((field, index) => {
     const rule = field.quality_rules?.[0] || {};
@@ -80,8 +84,9 @@ function trialFor(draft, payload = {}) {
   return {
     draft_id: draft.draft_id, revision: draft.revision, status: 'PASS', model_alias: payload.model_alias || 'frontend-mock', quality_model_alias: payload.quality_model_alias || 'frontend-mock', sample_count: count, step_count: stepCount, interval_minutes: intervalMinutes, seed: 20260901,
     generation_parameters: payload.generation_parameters || {}, quality_parameters: payload.quality_parameters || {},
+    assignment, stage1_request:stage1Request, generated_event:generatedEventResult, stage2_request:stage2Request,
     model_input: modelInput, output_series: series, gps_track: gpsTrack, numeric_fields: numericFields.map(field => ({ field_id: field.field_id, label: field.label || field.field_id })), quality_items: qualityItems,
-    qwen: { status: 'mocked', call_count: 1 },
+    qwen: { status: 'mocked-two-stage', call_count: count * 2 },
     quality: { status_counts: { PASS: count, REVIEW: 0, REJECT: 0 }, average_score: 96.4, local_rule_pass: true, qwen_pass: true },
     visualization: {
       preview_image_data_url: chartSvg('冷链试运行：温度曲线与运输路线'),
@@ -152,8 +157,7 @@ export const coldchainApi = {
   },
   getTemplateDraft: draftId => mockResult(readStore(DRAFT_STORE, []).find(item => item.draft_id === draftId)),
   createTemplateDraft: async payload => {
-    const seed = await officialTemplate();
-    const configuration = payload?.configuration || { ...seed.configuration, name: '新建冷链时序模板', description: '基于前端 Mock 的冷链时序模板草稿', scope: 'custom' };
+    const configuration = payload?.configuration || structuredClone(COLDCHAIN_MODEL_CONFIGURATION);
     const draft = { draft_id: id('COLDDRAFT'), status: 'draft', revision: 1, configuration, name: configuration.name, description: configuration.description, business_type: configuration.business_type, created_at: now(), updated_at: now(), validation: null, trial_run: null };
     updateStore(DRAFT_STORE, [], values => [draft, ...values]);
     return mockResult(draft);

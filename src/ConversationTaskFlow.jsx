@@ -18,7 +18,7 @@ export const CONVERSATION_TASK_INITIAL_VALUES = {
   enableQuality:true,
   enableAugmentation:true, augmentationMethods:['expression_rewrite','context_noise'],
   augmentationRatio:20, augmentationMaxNew:100, augmentationModelAlias:'qwen3-14b', augmentationEnableThinking:false, augmentationTemperature:0.7,
-  passThreshold:0.85, duplicateThreshold:0.92, qualityModelAlias:'qwen3-14b', qualityEnableThinking:false, qualityTemperature:0,
+  passThreshold:0.85, duplicateThreshold:0.92, qualityModelAlias:'qwen3-14b', embeddingModelAlias:'text-embedding-v3', qualityEnableThinking:false, qualityTemperature:0,
   enableExpansion:true, maxNew:8, coverageOverrides:[],
 };
 
@@ -57,6 +57,16 @@ const PRIVACY_CHECK_ROWS = [
   {key:'business',types:'真实运单号、客户编号、企业内部账号',mask:'替换为 SYN_ / CUSTOMER_ / ACCOUNT_ 合成标识'},
   {key:'secret',types:'API Key、Token、密码等凭证',mask:'替换为 [REDACTED_SECRET]，同时判为 REJECT'},
 ];
+
+const QUALITY_RULE_PACK_SUMMARY = [
+  {key:'base',name:'基础质检',count:8,engine:'Dingo',examples:'SFT 格式、多轮结构、空值、短文本、重复、安全、可读性、上下文相关性',color:'green'},
+  {key:'stats',name:'基础统计',count:3,engine:'Dingo + 系统',examples:'有效字符长度、词数范围、标点与超长句',color:'blue'},
+  {key:'privacy',name:'隐私质检',count:5,engine:'Dingo + 系统',examples:'PII、地址、业务标识、凭据；自动掩码',color:'purple'},
+  {key:'business',name:'业务契约质检',count:8,engine:'系统规则',examples:'唯一 ID、占位符、知识追溯、状态、工具、标签覆盖',color:'default'},
+  {key:'custom',name:'自定义质检',count:7,engine:'Dingo + 系统 Judge',examples:'敏感词、3H、任务难度、Answer Relevancy、Faithfulness',color:'gold'},
+];
+
+const EMBEDDING_MODEL_OPTIONS = [{label:'text-embedding-v3',value:'text-embedding-v3'}];
 
 const toolModeLabels = {
   provided_result:'工具结果已提供（不调用真实工具）', none:'纯对话',
@@ -183,15 +193,17 @@ export function ConversationQualityExpansionFields({ form, mode = 'combined', st
   const enabled = (standalone && showExpansion) || Boolean(Form.useWatch('enableExpansion', form));
   const coverageOverrides = Form.useWatch('coverageOverrides', form) || [];
   return <>
-    <Alert type="info" showIcon message="先质检，再决定定向扩增" description="模板中的固定规则和场景规则始终保留。存在阻断错误时为 REJECT；没有阻断错误且达到 PASS 阈值时为 PASS，否则为 REVIEW。"/>
-    {showQuality&&<Divider orientation="left">质量阈值</Divider>}
+    <Alert type="info" showIcon message="先质检，再决定定向扩增" description="任务继承模板锁定的五类规则包。任一 BLOCK 规则失败则 REJECT；仅 REVIEW 规则失败则进入 REVIEW；其余为 PASS，INFO 指标只统计不改变状态。"/>
+    {showQuality&&<><Divider orientation="left">质检规则包快照</Divider><Row gutter={[12,12]}>{QUALITY_RULE_PACK_SUMMARY.map(item=><Col span={8} key={item.key}><Card size="small"><Flex justify="space-between"><Text strong>{item.name}</Text><Tag color={item.color}>{item.count} 项</Tag></Flex><Paragraph type="secondary">{item.examples}</Paragraph><Text type="secondary">引擎：{item.engine}</Text></Card></Col>)}</Row></>}
+    {showQuality&&<Divider orientation="left">检测器配置</Divider>}
     <Row gutter={16}>
-      {showQuality&&<Col span={6}><Form.Item name="passThreshold" label="PASS 阈值" rules={[{required:true}]}><InputNumber min={0} max={1} step={0.01} precision={2} style={{width:'100%'}}/></Form.Item></Col>}
-      {showQuality&&<Col span={6}><Form.Item name="duplicateThreshold" label="近重复阈值"><InputNumber min={0.5} max={1} step={0.01} style={{width:'100%'}}/></Form.Item></Col>}
-      <Col span={6}><Form.Item name="qualityModelAlias" label="质检与扩增 API 模型" rules={[{required:true}]}><Select options={API_MODEL_OPTIONS}/></Form.Item></Col>
+      {showQuality&&<Col span={6}><Form.Item name="duplicateThreshold" label="跨样本近重复阈值"><InputNumber min={0.5} max={1} step={0.01} style={{width:'100%'}}/></Form.Item></Col>}
+      <Col span={6}><Form.Item name="qualityModelAlias" label="LLM 质检与扩增模型" rules={[{required:true}]}><Select options={API_MODEL_OPTIONS}/></Form.Item></Col>
+      {showQuality&&<Col span={6}><Form.Item name="embeddingModelAlias" label="Embedding 检测模型" rules={[{required:true}]}><Select options={EMBEDDING_MODEL_OPTIONS}/></Form.Item></Col>}
       <Col span={6}><Form.Item name="qualityEnableThinking" label="思考模式" valuePropName="checked"><Switch checkedChildren="开启" unCheckedChildren="关闭"/></Form.Item></Col>
       <Col span={6}><Form.Item name="qualityTemperature" label="Temperature"><InputNumber min={0} max={2} step={0.1} style={{width:'100%'}}/></Form.Item></Col>
     </Row>
+    {showQuality&&<Alert type="success" showIcon message="规则调用量按样本 × 已启用检测器估算" description="确定性规则本地批量执行；LLM 与 Embedding 检测器单独计费。执行失败会写入 evaluator_errors，不能被当作 PASS。"/>}
     {showQuality&&<Card size="small" className="section-title" title="隐私检查与自动脱敏" extra={<Space><Tag color="green">默认启用</Tag><Tag>系统固定策略</Tag></Space>}>
       <Paragraph type="secondary">对生成、增强和定向扩增的 Prompt、messages、工具轨迹与 Ground Truth 执行隐私检查；命中后自动使用系统默认掩码，暂不允许用户自定义脱敏方式。</Paragraph>
       <Table size="small" pagination={false} rowKey="key" dataSource={PRIVACY_CHECK_ROWS} columns={[{title:'隐私检查项',dataIndex:'types'},{title:'自动脱敏结果',dataIndex:'mask'}]}/>
@@ -208,7 +220,7 @@ export function ConversationQualityExpansionFields({ form, mode = 'combined', st
       ]}/>}</Form.List>
     </Card>}
     {showQuality&&<Card className="section-title" size="small" title="三类质检结果"><Row gutter={12}>{[
-      ['PASS','满足硬规则和质量门槛，进入训练交付集。','green'],['REVIEW','无硬错误但低于 PASS 门槛，进入人工复核集。','gold'],['REJECT','事实、规则、状态、工具或安全契约失败，不进入训练集。','red'],
+      ['PASS','全部 BLOCK / REVIEW 规则通过，进入训练交付集。','green'],['REVIEW','BLOCK 规则通过但至少一条 REVIEW 规则失败，进入人工复核集。','gold'],['REJECT','至少一条 BLOCK 规则失败，或检测器执行错误，不进入训练集。','red'],
     ].map(([title,desc,color])=><Col span={8} key={title}><Card size="small"><Tag color={color}>{title}</Tag><Paragraph type="secondary">{desc}</Paragraph></Card></Col>)}</Row></Card>}
   </>;
 }
@@ -226,8 +238,9 @@ export function ConversationSubmissionSummary({ form }) {
       {key:'augment',label:'通用增强',children:values.enableAugmentation?`${values.augmentationRatio}% · 预计 ${estimated} 条`:'未启用'},
       {key:'augmentModel',label:'增强模型',children:values.enableAugmentation?`${values.augmentationModelAlias} · 思考${values.augmentationEnableThinking?'开启':'关闭'} · T=${values.augmentationTemperature}`:'-'},
       {key:'methods',label:'增强方式',children:values.enableAugmentation?`${(values.augmentationMethods||[]).length} 种`:'-'},
-      {key:'qc',label:'质检门槛',children:`PASS ${values.passThreshold}`},
+      {key:'qc',label:'质检判定策略',children:'按规则级别：BLOCK / REVIEW / INFO'},
       {key:'qualityModel',label:'质检与扩增模型',children:`${values.qualityModelAlias} · 思考${values.qualityEnableThinking?'开启':'关闭'} · T=${values.qualityTemperature}`},
+      {key:'embeddingModel',label:'Embedding 检测模型',children:values.embeddingModelAlias||'-'},
       {key:'expansion',label:'定向扩增',children:values.enableExpansion?`最多新增 ${values.maxNew||0} 条`:'未启用'},
     ]}/>
   </>;
@@ -242,7 +255,7 @@ export async function createConversationBackendJob(form) {
     sft_format:'messages_jsonl',
     model:{provider:values.provider,alias:values.modelAlias,enable_thinking:Boolean(values.enableThinking),temperature:Number(values.temperature),max_retries:1},
     augmentation:{enabled:Boolean(values.enableAugmentation),methods:values.augmentationMethods||[],ratio:Number(values.augmentationRatio||0)/100,max_new:Number(values.augmentationMaxNew||0),model:{provider:'bailian',alias:values.augmentationModelAlias||'qwen3-14b',enable_thinking:Boolean(values.augmentationEnableThinking),temperature:Number(values.augmentationTemperature),max_retries:1}},
-    quality:{enabled:values.enableQuality!==false,judge_enabled:values.enableQuality!==false,pass_threshold:Number(values.passThreshold),duplicate_threshold:Number(values.duplicateThreshold),model:{provider:'bailian',alias:values.qualityModelAlias||'qwen3-14b',enable_thinking:Boolean(values.qualityEnableThinking),temperature:Number(values.qualityTemperature),max_retries:1}},
+    quality:{enabled:values.enableQuality!==false,judge_enabled:values.enableQuality!==false,decision_policy:'per_rule_severity',rule_pack_policy:'dingo-system-union/v1',duplicate_threshold:Number(values.duplicateThreshold),embedding_model:{provider:'bailian',alias:values.embeddingModelAlias||'text-embedding-v3'},model:{provider:'bailian',alias:values.qualityModelAlias||'qwen3-14b',enable_thinking:Boolean(values.qualityEnableThinking),temperature:Number(values.qualityTemperature),max_retries:1}},
     expansion:{enabled:values.enableQuality!==false&&Boolean(values.enableExpansion),max_new:values.enableQuality!==false&&values.enableExpansion?Number(values.maxNew||0):0,label_overrides:Object.fromEntries((values.coverageOverrides||[]).filter(item=>item.recommended!==null&&item.recommended!==undefined&&item.recommended!=='').map(item=>[`${item.dimension_id}::${item.label}`,Number(item.recommended)]))},
   });
 }
@@ -274,8 +287,9 @@ export function ConversationTaskInformation({ task }) {
       {key:'model',label:'模型',children:params.model?.provider==='mock'?'本地 Mock':params.model?.alias||'-'},
       {key:'seed',label:'随机种子',children:values.seed??params.seed??'-'},
       {key:'augment',label:'通用增强',children:params.augmentation?.enabled?`${Math.round(Number(params.augmentation.ratio||0)*100)}% · ${(params.augmentation.methods||[]).length} 种`:'未启用'},
-      {key:'quality',label:'质检阈值',children:`PASS ${params.quality?.pass_threshold??values.passThreshold??'-'}`},
+      {key:'quality',label:'质检判定策略',children:params.quality?.decision_policy==='per_rule_severity'?'按规则级别（BLOCK / REVIEW / INFO）':'按模板规则'},
       {key:'qualityModel',label:'质检与扩增模型',children:params.quality?.model?`${params.quality.model.alias} · 思考${params.quality.model.enable_thinking?'开启':'关闭'} · T=${params.quality.model.temperature}`:values.qualityModelAlias||'-'},
+      {key:'embeddingModel',label:'Embedding 检测模型',children:params.quality?.embedding_model?.alias||values.embeddingModelAlias||'-'},
       {key:'expansion',label:'定向扩增',children:params.expansion?.enabled?`最多 ${params.expansion.max_new} 条`:'未启用'},
       {key:'write',label:'结果写入',children:values.outputMode==='newVersion'?`${values.targetDataset} / 新版本`:values.outputDatasetName||'-'},
     ]}/>
@@ -326,6 +340,7 @@ export function ConversationTaskResults({ job }) {
       {key:'score',label:'最终平均分',children:finalQuality.average_score??'-'},
       {key:'usage',label:'模型调用',children:`${result.usage?.calls??0} 次`},
     ]}/></>}
+    {Object.keys(finalQuality.category_summary||{}).length>0&&<><Divider orientation="left">五类质检汇总</Divider><Row gutter={[12,12]}>{Object.entries(finalQuality.category_summary).map(([key,item])=><Col span={Math.max(4,Math.floor(24/Object.keys(finalQuality.category_summary).length))} key={key}><Card size="small"><Text type="secondary">{item.label}</Text><div><Tag color="green">通过 {item.pass||0}</Tag>{Boolean(item.review)&&<Tag color="orange">复核 {item.review}</Tag>}{Boolean(item.block)&&<Tag color="red">阻断 {item.block}</Tag>}{Boolean(item.info)&&<Tag color="blue">统计 {item.info}</Tag>}</div></Card></Col>)}</Row></>}
     {(initialQuality.sample_count||finalQuality.sample_count)&&<Card className="section-title" size="small" title="隐私检查与脱敏报告" extra={<Tag color={finalPrivacyRisks?'red':'green'}>{finalPrivacyRisks?'REJECT':'PASS'}</Tag>}>
       <Descriptions bordered size="small" column={3} items={[
         {key:'initialPrivacy',label:'初次隐私风险',children:`${initialPrivacyRisks} 项`},
@@ -340,7 +355,7 @@ export function ConversationTaskResults({ job }) {
     {result.retrieval_preview?.length>0&&<><Divider orientation="left">实际规则召回</Divider><Table size="small" pagination={false} rowKey="rule_id" dataSource={result.retrieval_preview} columns={[{title:'#',dataIndex:'rank',width:50},{title:'规则 ID',dataIndex:'rule_id'},{title:'名称',dataIndex:'title'},{title:'分数',dataIndex:'score'}]}/></>}
     {result.preview_samples?.[0]&&<><Divider orientation="left">对话样本预览</Divider><Card size="small">{result.preview_samples[0].messages?.map((item,index)=><div className={`conversation-message role-${item.role}`} key={`${item.turn}-${index}`}><Tag>{item.role}</Tag><Text>{item.content||(item.tool_call?`调用 ${item.tool_call.name}`:'')}</Text></div>)}</Card></>}
     <Divider orientation="left">结果文件</Divider>
-    <Space wrap>{urls.final_quality_report&&<Button href={urls.final_quality_report} target="_blank">最终质检报告 MD</Button>}{job.id&&<Button type="primary" href={`/reports/conversations/${encodeURIComponent(job.id)}/quality`} target="_blank">打开可视化质检报告</Button>}{urls.prompt_generator&&<Button href={urls.prompt_generator} target="_blank">Prompt 生成器</Button>}{urls.synthesis_prompts&&<Button href={urls.synthesis_prompts} target="_blank">单条 Prompt</Button>}{urls.augmented_conversations&&<Button href={urls.augmented_conversations}>增强样本</Button>}{urls.train_pass&&<Button href={urls.train_pass}>下载 PASS JSONL</Button>}</Space>
+    <Space wrap>{urls.final_quality_report&&<Button href={urls.final_quality_report} target="_blank">最终质检报告 MD</Button>}{job.id&&<Button type="primary" href={`/reports/conversations/${encodeURIComponent(job.id)}/quality`} target="_blank">打开可视化质检报告</Button>}{urls.dingo_raw_results&&<Button href={urls.dingo_raw_results} target="_blank">Dingo 原始结果</Button>}{urls.quality_rule_manifest&&<Button href={urls.quality_rule_manifest} target="_blank">规则版本清单</Button>}{urls.prompt_generator&&<Button href={urls.prompt_generator} target="_blank">Prompt 生成器</Button>}{urls.synthesis_prompts&&<Button href={urls.synthesis_prompts} target="_blank">单条 Prompt</Button>}{urls.augmented_conversations&&<Button href={urls.augmented_conversations}>增强样本</Button>}{urls.train_pass&&<Button href={urls.train_pass}>下载 PASS JSONL</Button>}</Space>
     {!Object.keys(urls).length&&<Alert className="section-title" type="info" showIcon icon={<SafetyCertificateOutlined/>} message="结果文件将在对应阶段完成后写入"/>}
   </div>;
 }

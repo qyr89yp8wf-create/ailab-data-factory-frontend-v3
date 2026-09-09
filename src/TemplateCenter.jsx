@@ -7,7 +7,7 @@ import {
 import {
   ApartmentOutlined, ArrowLeftOutlined, CheckCircleOutlined, ClockCircleOutlined,
   CloudUploadOutlined, DownOutlined, FileImageOutlined, FileTextOutlined,
-  FundOutlined, LeftOutlined, PlusOutlined, SearchOutlined,
+  FundOutlined, LeftOutlined, PlusOutlined, SaveOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import { templateApi } from './templateApi';
 import TemplateEditor from './template-editor/TemplateEditor';
@@ -120,6 +120,8 @@ function SeedMockWorkspace({ type, fileName, name, businessType, description, on
 function DocumentTemplateCreatePage({ onBack, onCreated, onUpdated }) {
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [backgroundDraft, setBackgroundDraft] = useState(null);
   const fileList = Form.useWatch('seedFile', form) || [];
   const semanticParamsEnabled = Form.useWatch('semanticParamsEnabled', form);
   const businessType = Form.useWatch('businessType', form) || '报关单';
@@ -142,6 +144,37 @@ function DocumentTemplateCreatePage({ onBack, onCreated, onUpdated }) {
     if(file instanceof Blob){const url=URL.createObjectURL(file);const image=new window.Image();image.onload=()=>{setImageDimensions(`${image.naturalWidth} × ${image.naturalHeight}`);form.setFieldValue('imgsz',Math.max(image.naturalWidth,image.naturalHeight));URL.revokeObjectURL(url);};image.src=url;}
     return()=>clearInterval(timer);
   },[fileList,form]);
+  const saveBackgroundDraft = async () => {
+    const values = form.getFieldsValue(true);
+    if (values.businessType !== '运单') return;
+    setSavingDraft(true);
+    try {
+      const referenceFile = values.backgroundSeedFile?.[0]?.originFileObj || values.backgroundSeedFile?.[0];
+      const payload = {
+        name: values.name?.trim() || '未命名物流运单底图模板',
+        business_type: values.documentBusinessType?.trim() || '物流运单',
+        description: values.description || '',
+        document_type: 'domestic_waybill',
+        content_subtype: 'logistics_waybill',
+        creation_method: 'background_generation',
+        background_generation: {
+          reference_file_name: referenceFile?.name || '',
+          image_model: values.imageGenerationModel || '',
+          prompt: values.baseImagePrompt || '',
+        },
+      };
+      const saved = backgroundDraft
+        ? await syntheticTemplateApi.saveDraft(backgroundDraft.id, { ...payload, expected_revision: backgroundDraft.revision })
+        : await syntheticTemplateApi.createDraft(payload);
+      setBackgroundDraft(saved);
+      if (backgroundDraft) onUpdated(saved); else onCreated(saved);
+      message.success(backgroundDraft ? '草稿已更新' : '草稿已保存');
+    } catch (error) {
+      message.error(error.message || '草稿保存失败');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
   const submit = async () => {
     const values = await form.validateFields();
     const file = values.seedFile?.[0]?.originFileObj || values.seedFile?.[0];
@@ -178,16 +211,19 @@ function DocumentTemplateCreatePage({ onBack, onCreated, onUpdated }) {
   ];
   return <div className="template-create-page document-template-create-page">
     <Flex className="page-header" justify="space-between" align="flex-start"><Space align="start"><Button type="text" icon={<LeftOutlined/>} aria-label="返回模板中心" onClick={onBack}/><div><Title level={2}>新建文档类图像模板</Title><Paragraph type="secondary">配置模板基础信息并选择版式制作方式</Paragraph></div></Space></Flex>
-    <Flex justify="space-between" align="center" className="conversation-template-statusbar template-editor-step-actions-top"><Tag color="blue">文档类图像</Tag><Button type="primary" disabled={businessType==='报关单'&&(!fileList.length||privacyProgress<100)} loading={submitting} onClick={submit}>{submitting ? '正在处理' : '下一步'}</Button></Flex>
-    <Card className="main-card" title="版面分析与语义提取">
-      <Steps current={0} items={analysisSteps} className="template-editor-steps"/>
-      <Form form={form} layout="vertical" initialValues={{ businessType: '报关单', documentBusinessType:'贸易申报单', description:'', imgsz: 1024, conf: 0.2, semanticModel: 'qwen3-vl-8b-instruct', semanticParamsEnabled:false, semanticParamsJson:'{\n  "temperature": 0.2\n}', imageGenerationModel:'doubao-seedream-5-0-260128', baseImagePrompt:'生成一张横向物流运单表单底图，采用清晰的表格分区，包含寄件信息、收件信息、货物信息、重量体积、费用、签收和条码区域。使用中性蓝灰与浅橙配色，不出现任何真实企业名称、品牌 Logo、个人信息、有效条码或可追踪编号；保留足够留白供后续动态字段填充，文字与边框清晰，适合合成训练数据。' }} className="template-analysis-form">
+    <Flex justify="space-between" align="center" className="conversation-template-statusbar template-editor-step-actions-top"><Tag color="blue">文档类图像</Tag><Space>{businessType==='运单'&&<Button icon={<SaveOutlined/>} loading={savingDraft} onClick={saveBackgroundDraft}>{backgroundDraft?'更新草稿':'保存草稿'}</Button>}<Button type="primary" disabled={businessType==='报关单'&&(!fileList.length||privacyProgress<100)} loading={submitting} onClick={submit}>{submitting ? '正在处理' : '下一步'}</Button></Space></Flex>
+    <Form form={form} layout="vertical" initialValues={{ businessType: '报关单', name:'进口货物申报单图像模板', documentBusinessType:'贸易申报单', description:'用于制作贸易申报单类文档图像模板，覆盖版面结构识别、业务字段提取、动态内容替换与合成数据生成。', imgsz: 1024, conf: 0.2, semanticModel: 'qwen3-vl-8b-instruct', semanticParamsEnabled:false, semanticParamsJson:'{\n  "temperature": 0.2\n}', imageGenerationModel:'doubao-seedream-5-0-260128', baseImagePrompt:'生成一张横向物流运单表单底图，采用清晰的表格分区，包含寄件信息、收件信息、货物信息、重量体积、费用、签收和条码区域。使用中性蓝灰与浅橙配色，不出现任何真实企业名称、品牌 Logo、个人信息、有效条码或可追踪编号；保留足够留白供后续动态字段填充，文字与边框清晰，适合合成训练数据。' }} className="template-analysis-form">
+      <Steps current={0} items={analysisSteps} className="template-editor-steps main-card"/>
+      <Card className="main-card" title="模板基础信息">
         <Row gutter={16}><Col span={12}><Form.Item name="name" label="模板名称" rules={[{ required: true, message: '请输入模板名称' }, { max: 80 }]}><Input placeholder="例如：进口货物申报单模板"/></Form.Item></Col><Col span={12}><Form.Item name="documentBusinessType" label="业务类型" rules={[{required:true,whitespace:true,message:'请输入业务类型'}]}><Input placeholder="例如：贸易申报单、物流运单"/></Form.Item></Col></Row>
-        <Form.Item name="description" label="模板说明" rules={[{max:500}]}><Input.TextArea rows={2} maxLength={500} showCount/></Form.Item>
+        <Form.Item name="description" label="模板描述" rules={[{max:500}]}><Input.TextArea rows={3} maxLength={500} showCount placeholder="例如：用于制作贸易申报单类文档图像模板，覆盖版面分析、字段提取和合成数据生成。"/></Form.Item>
+      </Card>
+      <Card className="main-card" title="版面分析与语义提取">
         <Form.Item name="businessType" label="模板制作方式" rules={[{ required: true, message:'请选择模板制作方式' }]}>
-          <Segmented block options={documentBusinessOptions} onChange={value=>form.setFieldsValue({ businessType:value, seedFile:[] })}/>
+          <Segmented block options={documentBusinessOptions} onChange={value=>form.setFieldsValue(value==='运单'?{businessType:value,seedFile:[],name:'物流运单底图生成模板',documentBusinessType:'物流运单',description:'用于生成虚构物流运单文档图像，覆盖寄件、收件、货物、费用、签收和条码等版面区域。'}:{businessType:value,seedFile:[],name:'进口货物申报单图像模板',documentBusinessType:'贸易申报单',description:'用于制作贸易申报单类文档图像模板，覆盖版面结构识别、业务字段提取、动态内容替换与合成数据生成。'})}/>
         </Form.Item>
         <Alert className="template-modal-note" type="info" showIcon message={businessType === '报关单' ? '版面分析法' : '底图生成法'} description={businessType === '报关单' ? '上传种子图片，通过版面检测、OCR、结构校准和字段配置制作模板。' : '解析业务字段并基于平台生成的安全底图进行在线编辑，不复制真实品牌或版面。'}/>
+      {businessType === '运单' && <Form.Item name="backgroundSeedFile" label="上传参考底图" valuePropName="fileList" getValueFromEvent={event => Array.isArray(event) ? event : event?.fileList} rules={[{ required: true, message: '请上传参考底图' }]}><Upload.Dragger accept=".png,.jpg,.jpeg,.webp,.bmp" maxCount={1} beforeUpload={() => false}><p className="ant-upload-drag-icon"><CloudUploadOutlined /></p><p>拖拽或点击选择底图</p><p className="ant-upload-hint">底图生成法将使用该图片作为参考</p></Upload.Dragger></Form.Item>}
       {businessType==='运单'&&<Card size="small" title="底图生成配置" className="template-editor-card"><Form.Item name="imageGenerationModel" label="图像生成模型" rules={[{required:true}]}><Select options={[{value:'doubao-seedream-5-0-260128',label:'豆包 Seedream 5.0（doubao-seedream-5-0-260128）'}]}/></Form.Item><Form.Item name="baseImagePrompt" label="底图生成提示词" rules={[{required:true,whitespace:true,message:'请输入底图生成提示词'}]}><Input.TextArea rows={7}/></Form.Item><Descriptions bordered size="small" column={2} items={[{key:'calls',label:'预计图像生成 API 调用',children:'1 次'},{key:'tokens',label:'当前提示词长度',children:`${(baseImagePrompt||'').length} 字符`}]}/></Card>}
       {businessType==='报关单'&&<Form.Item name="seedFile" label="上传种子图片" valuePropName="fileList" getValueFromEvent={event => Array.isArray(event) ? event : event?.fileList} rules={[{ required: true, message: '请上传种子图片' }]}>
         <Upload.Dragger accept=".png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" maxCount={1} beforeUpload={() => false}>
@@ -195,7 +231,6 @@ function DocumentTemplateCreatePage({ onBack, onCreated, onUpdated }) {
         </Upload.Dragger>
       </Form.Item>}
       {businessType==='报关单'&&!!fileList.length&&<Card size="small" className="section-title" title="种子数据隐私检查与脱敏保护"><Progress percent={privacyProgress} status={privacyProgress<100?'active':'success'}/><Text type="secondary">{privacyProgress<100?'正在检测隐私字段并生成脱敏保护副本，完成前不能进入下一步。':'隐私检查与脱敏保护完成，后续流程使用受保护副本。'}</Text></Card>}
-      {businessType === '运单' && <Form.Item name="backgroundSeedFile" label="上传参考底图" valuePropName="fileList" getValueFromEvent={event => Array.isArray(event) ? event : event?.fileList} rules={[{ required: true, message: '请上传参考底图' }]}><Upload.Dragger accept=".png,.jpg,.jpeg,.webp,.bmp" maxCount={1} beforeUpload={() => false}><p className="ant-upload-drag-icon"><CloudUploadOutlined /></p><p>拖拽或点击选择底图</p><p className="ant-upload-hint">底图生成法将使用该图片作为参考</p></Upload.Dragger></Form.Item>}
       <Row gutter={16}>
         <Col span={12}><Form.Item name="imgsz" label="版面推理尺寸" tooltip={`种子图片尺寸：${imageDimensions||'待读取'}`} rules={[{required:true}]}><InputNumber min={320} max={4096} step={64} addonAfter="px" style={{width:'100%'}}/></Form.Item></Col>
         <Col span={12}><Form.Item name="conf" label={businessType === '运单' ? '区块置信度阈值' : '置信度阈值'} tooltip="不是准确率；越高返回框越少" rules={[{ required: true }]}><InputNumber min={0.01} max={1} step={0.05} precision={2} style={{ width: '100%' }}/></Form.Item></Col>
@@ -207,8 +242,8 @@ function DocumentTemplateCreatePage({ onBack, onCreated, onUpdated }) {
       <Card size="small" title="语义提取提示词" extra={<Tag color="blue">{semanticConfig?.prompt_version || 'document-template-semantic/v2'}</Tag>} className="template-editor-card">
         <Form.Item name="semanticPrompt" initialValue={semanticConfig?.system_prompt || '结合整张单据的阅读顺序、空间位置、标签—值关系和跨字段关系，识别固定文字、动态字段及其绑定关系。'}><Input.TextArea autoSize={{ minRows: 5, maxRows: 10 }}/></Form.Item>
       </Card>
-      </Form>
-    </Card>
+      </Card>
+    </Form>
   </div>;
 }
 
